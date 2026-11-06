@@ -1,11 +1,9 @@
-"""AI layer (owner: Adekola Folarin John).
+"""AI implementation for Conflux HQ.
 
-Planned modules:
-  classifier.py  complaint text -> issue_type, severity, sentiment, language, amount
-  agent.py       investigation agent with tools (incident stats, transactions, events)
-  drafts.py      customer holding message and IT ticket drafts
+- classifier.py classifies masked complaints with Claude or deterministic fallback.
+- evidence.py builds factual incident evidence from database records.
+- agent.py turns evidence into a bounded investigation result.
+- drafts.py creates customer and IT drafts, which require human approval.
 
-Contract with the backend: write classification results with
-PATCH /api/v1/complaints/{id}/classification, and write drafts to the `drafts`
-table with status "pending". The agent proposes; a human approves.
+The AI never executes a reversal or any other money movement.
 """

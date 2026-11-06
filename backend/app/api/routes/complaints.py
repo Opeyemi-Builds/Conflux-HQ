@@ -11,6 +11,8 @@ from app.schemas.complaint import (
     BulkResult, ComplaintBulkCreate, ComplaintClassification, ComplaintCreate, ComplaintRead,
 )
 from app.services import complaint_service
+from app.services.audit import log_event
+from app.ai.classifier import classify as ai_classify_complaint_text
 
 router = APIRouter(prefix="/complaints", tags=["complaints"])
 
@@ -74,3 +76,22 @@ def get_complaint(complaint_id: uuid.UUID, user: AuthUser, db: DbSession):
 @router.patch("/{complaint_id}/classification", response_model=ComplaintRead)
 def classify_complaint(complaint_id: uuid.UUID, payload: ComplaintClassification, user: Operator, db: DbSession):
     return complaint_service.apply_classification(db, _own(db, complaint_id, user.bank_id), payload)
+
+
+@router.post("/{complaint_id}/classify", response_model=ComplaintRead)
+def ai_classify_complaint(complaint_id: uuid.UUID, user: Operator, db: DbSession):
+    complaint = _own(db, complaint_id, user.bank_id)
+    result, source = ai_classify_complaint_text(complaint.text, complaint.channel.value)
+    runtime = getattr(result, "_runtime", {})
+    classified = complaint_service.apply_classification(db, complaint, ComplaintClassification(
+        issue_type=result.issue_type.value if hasattr(result.issue_type, "value") else result.issue_type,
+        severity=result.severity, sentiment=result.sentiment, language=result.language,
+        summary=result.short_summary, mentioned_amount=result.mentioned_amount,
+        mentioned_time=result.mentioned_time, confidence=result.confidence,
+        is_fraud=result.is_fraud))
+    log_event(db, bank_id=user.bank_id, actor=str(user.id), action="complaint_classified",
+              entity_type="complaint", entity_id=str(complaint.id),
+              details={"issue_type": classified.issue_type.value, "source": source,
+                       **{key: value for key, value in runtime.items() if key != "source"}})
+    db.commit()
+    return classified

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Numeric, String, Text, Uuid
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Numeric, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, utcnow
@@ -30,6 +30,8 @@ class Complaint(Base):
     summary: Mapped[str | None] = mapped_column(Text)
     is_fraud: Mapped[bool] = mapped_column(Boolean, default=False)
     mentioned_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    mentioned_time: Mapped[str | None] = mapped_column(String(64))
+    classification_confidence: Mapped[float | None] = mapped_column(Float)
     classified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     transaction_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("transactions.id"), index=True)

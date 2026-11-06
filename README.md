@@ -4,9 +4,13 @@
 
 Built for the Access Youth Tech Forge hackathon, Theme 1: Payments and Financial Infrastructure.
 
+<<<<<<< HEAD
+> **Status: hackathon prototype.** The backend, deterministic spike detection, Claude-ready classifier, bounded investigation agent, draft workflow and synthetic demo seed are implemented. The dashboard remains in progress. All prototype data is synthetic; no real bank or customer data is used.
+=======
 > **Status: hackathon prototype.** The backend now includes a demo-only **Zymic Bank / 123** login, Supabase Postgres configuration, complaint ingestion, spike detection, analytics and synthetic-data routes. Dashboard source is present in `frontend/`; AI classification, investigation and approvals are not implemented. All prototype data is synthetic; no real bank or customer data is used.
 >
 > **Current demo setup and API contract:** [backend/README.md](backend/README.md). Demo login is separate from Supabase Auth; supply a Supabase database connection and a random demo token secret. Registration and staff administration are hidden in demo mode. The older Supabase Auth workflow below is available only with `DEMO_MODE=false`.
+>>>>>>> origin/main
 
 ---
 
@@ -115,7 +119,18 @@ cd backend
 pytest
 ```
 
-The tests use a fake Supabase, so no keys are needed. They cover registration, login, roles, bank isolation, PII masking and spike detection.
+The tests use a fake Supabase, so no keys are needed. They cover registration, login, roles, bank isolation, PII masking, spike detection and the AI fallback.
+
+### 4. Verify the AI without Anthropic
+
+The classifier and investigation agent use deterministic fallbacks when `ANTHROPIC_API_KEY` is empty. This is the simplest offline demo:
+
+```bash
+cd backend
+pytest tests/test_ai.py -q
+```
+
+You can also call Claude through the API by setting `ANTHROPIC_API_KEY` in `.env`. Never put a real key in source control or a frontend.
 
 ## Configuration
 
