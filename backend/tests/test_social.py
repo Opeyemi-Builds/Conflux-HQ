@@ -69,7 +69,7 @@ def test_alias_configuration_and_tenant_safe_intake(monkeypatch):
         assert first.status_code == 202
         body = first.json()
         assert body["issue_type"] == "double_debit" and body["channel"] == "x"
-        assert body["analysis_method"] == "demo_rules_v1" and body["synthetic"] is True
+        assert body["analysis_method"] == "demo_rules_v1" and body["synthetic"] is False
         duplicate = client.post("/api/v1/social/events", json=event("p-1", "@zymicbank another different text"))
         assert duplicate.json()["duplicate"] is True
         unmatched = client.post("/api/v1/social/events", json=event("p-no", "I need access to my account"))
@@ -104,6 +104,25 @@ def test_matching_rejects_ambiguous_bank_and_generic_access(monkeypatch):
         assert generic.json()["reason"] == "no_bank_match"
         ambiguous = client.post("/api/v1/social/events", json=event("a", "Zymic Bank and Access Bank both failed my transfer"))
         assert ambiguous.json()["reason"] == "ambiguous_bank_match"
+    finally:
+        engine.dispose()
+
+
+def test_monitoring_discovery_and_non_demo_delivery(monkeypatch):
+    client, sessions, engine = setup(monkeypatch)
+    try:
+        assert client.get("/api/v1/social/monitoring-rules").status_code == 401
+        client.headers["Authorization"] = "Bearer " + ADAPTER
+        rules = client.get("/api/v1/social/monitoring-rules").json()
+        assert rules["items"][0]["bank_id"] == str(DEMO_BANK_ID)
+        assert rules["items"][0]["aliases"][0]["value"] == "zymic bank"
+        assert client.get("/api/v1/social/monitoring-rules?limit=0").status_code == 422
+        monkeypatch.setattr(get_settings(), "demo_mode", False)
+        response = client.post("/api/v1/social/events", json=event("live", "Zymic Bank transfer failed"))
+        assert response.status_code == 202 and response.json()["accepted"]
+        assert response.json()["synthetic"] is False
+        monkeypatch.setattr(get_settings(), "social_adapter_token", "")
+        assert client.get("/api/v1/social/monitoring-rules").status_code == 503
     finally:
         engine.dispose()
 

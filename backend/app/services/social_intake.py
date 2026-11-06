@@ -28,6 +28,7 @@ class AliasBatch(BaseModel):
 
 
 class SocialEvent(BaseModel):
+    synthetic: bool = False
     platform: Platform
     post_id: str = Field(min_length=1, max_length=160, pattern=r"^[A-Za-z0-9_.:-]+$")
     text: str = Field(min_length=1, max_length=5000)

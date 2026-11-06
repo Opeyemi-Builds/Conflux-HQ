@@ -12,6 +12,6 @@ if not get_settings().demo_mode:
 api_router.include_router(complaints.router)
 api_router.include_router(incidents.router)
 api_router.include_router(analytics.router)
+api_router.include_router(social.router)
 if get_settings().demo_mode:
     api_router.include_router(synthetic.router)
-    api_router.include_router(social.router)
