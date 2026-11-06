@@ -4,7 +4,9 @@
 
 Built for the Access Youth Tech Forge hackathon, Theme 1: Payments and Financial Infrastructure.
 
-> **Status: hackathon prototype.** The backend (accounts, data model, complaint ingestion, spike detection) is built and tested. The dashboard, AI classifier, investigation agent and synthetic data generator are in progress. All prototype data is synthetic; no real bank or customer data is used.
+> **Status: hackathon prototype.** The backend now includes a demo-only **Zymic Bank / 123** login, Supabase Postgres configuration, complaint ingestion, spike detection, analytics and synthetic-data routes. Dashboard, AI classification, investigation and approvals are not implemented. All prototype data is synthetic; no real bank or customer data is used.
+>
+> **Current demo setup and API contract:** [backend/README.md](backend/README.md). Demo login is separate from Supabase Auth; supply a Supabase database connection and a random demo token secret. Registration and staff administration are hidden in demo mode. The older Supabase Auth workflow below is available only with `DEMO_MODE=false`.
 
 ---
 
@@ -104,7 +106,7 @@ uvicorn app.main:app --reload
 
 Open http://localhost:8000/docs for interactive API docs.
 
-To try it without Supabase, set `DATABASE_URL=sqlite:///./conflux.db`; auth endpoints still need Supabase keys. The test suite needs neither.
+To try it without Supabase, explicitly set `DATABASE_URL=sqlite:///./conflux.db`. Demo login needs `DEMO_TOKEN_SECRET`, not Supabase Auth keys; the retained non-demo auth endpoints need Supabase keys. See [backend/README.md](backend/README.md) for the current demo instructions. The test suite needs neither live service.
 
 ### 3. Run the tests
 
