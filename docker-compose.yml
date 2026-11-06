@@ -1,0 +1,13 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: conflux
+      POSTGRES_PASSWORD: conflux
+      POSTGRES_DB: conflux
+    ports:
+      - "5432:5432"
+    volumes:
+      - conflux_pgdata:/var/lib/postgresql/data
+volumes:
+  conflux_pgdata:
