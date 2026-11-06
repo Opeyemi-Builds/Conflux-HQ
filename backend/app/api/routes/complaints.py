@@ -1,8 +1,8 @@
 import uuid
-from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
+from pydantic import AwareDatetime
 
 from app.api.deps import AuthUser, DbSession, Operator
 from app.models import Complaint
@@ -41,12 +41,20 @@ def list_complaints(
     channel: Channel | None = None,
     issue_type: IssueType | None = None,
     unclassified: bool = False,
-    since: datetime | None = None,
-    until: datetime | None = None,
+    since: AwareDatetime | None = None,
+    until: AwareDatetime | None = None,
+    region: str | None = Query(None, max_length=64),
+    is_fraud: bool | None = None,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
-    q = select(Complaint).where(Complaint.bank_id == user.bank_id).order_by(Complaint.occurred_at.desc())
+    if since and until and since >= until:
+        raise HTTPException(422, "since must be earlier than until")
+    q = select(Complaint).where(Complaint.bank_id == user.bank_id).order_by(Complaint.occurred_at.desc(), Complaint.id)
+    if region is not None:
+        q = q.where(Complaint.region == region)
+    if is_fraud is not None:
+        q = q.where(Complaint.is_fraud == is_fraud)
     if channel:
         q = q.where(Complaint.channel == channel)
     if issue_type:

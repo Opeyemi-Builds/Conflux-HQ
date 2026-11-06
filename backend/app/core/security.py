@@ -27,6 +27,18 @@ def decode_token(token: str) -> dict:
     """
     s = get_settings()
     try:
+        if s.demo_mode:
+            from app.services.demo_auth import DEMO_AUDIENCE, DEMO_ISSUER, DEMO_USER_ID
+            if len(s.demo_token_secret) < 32:
+                raise AuthError("Demo token verification is not configured")
+            claims = jwt.decode(
+                token, s.demo_token_secret, algorithms=["HS256"],
+                audience=DEMO_AUDIENCE, issuer=DEMO_ISSUER,
+                options={"require": ["exp", "sub", "iat", "iss", "aud"]},
+            )
+            if claims["sub"] != str(DEMO_USER_ID):
+                raise AuthError("Invalid demo identity")
+            return claims
         alg = jwt.get_unverified_header(token).get("alg")
         if alg not in _ALLOWED_ALGS:
             raise AuthError("Unsupported token algorithm")

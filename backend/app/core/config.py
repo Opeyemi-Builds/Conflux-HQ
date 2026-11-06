@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,7 +13,15 @@ class Settings(BaseSettings):
     environment: str = "development"
     api_prefix: str = "/api/v1"
 
-    database_url: str = "sqlite:///./conflux.db"
+    # Supabase Session pooler; replace placeholders in .env before connecting.
+    # SQLite is an explicit offline/test option, never a silent fallback.
+    database_url: str = "postgresql+psycopg://postgres.PROJECT_REF:DB_PASSWORD@POOLER_HOST:5432/postgres?sslmode=require"
+    demo_mode: bool = True
+    demo_username: str = "Zymic Bank"
+    demo_password: str = "123"
+    demo_token_secret: str = ""  # required: set a random secret of at least 32 characters
+    demo_token_minutes: int = Field(default=120, ge=1, le=1440)
+    social_adapter_token: str = ""  # simulator/webhook bearer credential, not the Supabase service key
     auto_create_tables: bool = False  # use Alembic migrations; True only for throwaway SQLite
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
@@ -42,6 +50,12 @@ class Settings(BaseSettings):
     spike_baseline_hours: int = 24
     spike_mad_multiplier: float = 3.0
     spike_min_volume: int = 10
+
+    @model_validator(mode="after")
+    def _demo_is_not_production(self):
+        if self.demo_mode and self.environment.lower() in {"production", "prod"}:
+            raise ValueError("DEMO_MODE must be disabled in production")
+        return self
 
     @field_validator("database_url")
     @classmethod

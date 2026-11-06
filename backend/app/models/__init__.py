@@ -4,5 +4,6 @@ from app.models.complaint import Complaint
 from app.models.incident import Draft, Incident
 from app.models.system_event import SystemEvent
 from app.models.transaction import Transaction
+from app.models.social import BankAlias, SocialReceipt
 
-__all__ = ["AuditLog", "Bank", "Complaint", "Draft", "Incident", "Profile", "SystemEvent", "Transaction"]
+__all__ = ["AuditLog", "Bank", "BankAlias", "Complaint", "Draft", "Incident", "Profile", "SocialReceipt", "SystemEvent", "Transaction"]

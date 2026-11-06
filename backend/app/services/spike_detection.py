@@ -103,7 +103,21 @@ def run_detection(
             )
         ).scalars().first()
         if already_open:
-            already_open.complaint_count += current
+            # Only count newly attached complaints; repeated polling must be idempotent.
+            for complaint in current_complaints[issue_type]:
+                if complaint.incident_id is None:
+                    complaint.incident_id = already_open.id
+            db.flush()
+            linked = db.scalars(select(Complaint).where(
+                Complaint.bank_id == bank_id, Complaint.incident_id == already_open.id
+            )).all()
+            already_open.complaint_count = len(linked)
+            channels = defaultdict(int)
+            for complaint in linked:
+                channels[complaint.channel.value] += 1
+            already_open.affected_channels = dict(channels)
+            already_open.growth_rate = round(result.growth_rate, 2)
+            already_open.priority_score = priority_score(len(linked), result.growth_rate)
             continue
 
         channels: dict[str, int] = defaultdict(int)
@@ -114,6 +128,7 @@ def run_detection(
             bank_id=bank_id,
             issue_type=issue_type,
             started_at=current_start,
+            detected_at=now,
             complaint_count=current,
             baseline=result.baseline,
             growth_rate=round(result.growth_rate, 2),

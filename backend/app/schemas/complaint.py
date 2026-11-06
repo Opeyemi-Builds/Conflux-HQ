@@ -52,9 +52,13 @@ class ComplaintRead(BaseModel):
     summary: str | None
     is_fraud: bool
     mentioned_amount: Decimal | None
+<<<<<<< HEAD
     mentioned_time: str | None
     classification_confidence: float | None
     transaction_id: str | None
+=======
+    transaction_id: uuid.UUID | None
+>>>>>>> origin/main
     incident_id: uuid.UUID | None
 
 
