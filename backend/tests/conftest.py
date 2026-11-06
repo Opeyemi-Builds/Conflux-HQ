@@ -1,5 +1,7 @@
 import os
 
+os.environ["DEMO_MODE"] = "false"  # retain coverage of the future Supabase Auth flow
+os.environ["DEMO_TOKEN_SECRET"] = "demo-test-secret-at-least-thirty-two-characters"
 os.environ["AUTO_CREATE_TABLES"] = "false"
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["SUPABASE_JWT_SECRET"] = "test-secret-test-secret-test-secret-123456"
