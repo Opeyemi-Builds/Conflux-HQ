@@ -32,11 +32,17 @@ class DemoTokenResponse(BaseModel):
     user: MeRead
 
 
+demo_router = APIRouter()
+
+
+@demo_router.post("/login", response_model=DemoTokenResponse)
+def demo_login(payload: DemoLoginRequest, db: DbSession):
+    """Demo-only credentials. Supabase Postgres stores data; this is not Supabase Auth."""
+    return demo_auth.login(db, payload.username, payload.password)
+
+
 if get_settings().demo_mode:
-    @router.post("/login", response_model=DemoTokenResponse)
-    def demo_login(payload: DemoLoginRequest, db: DbSession):
-        """Demo-only credentials. Supabase Postgres stores data; this is not Supabase Auth."""
-        return demo_auth.login(db, payload.username, payload.password)
+    router.include_router(demo_router)
 
 
 @legacy_router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
