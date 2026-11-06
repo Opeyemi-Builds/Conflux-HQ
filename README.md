@@ -4,7 +4,7 @@
 
 Built for the Access Youth Tech Forge hackathon, Theme 1: Payments and Financial Infrastructure.
 
-> **Status: hackathon prototype.** The backend now includes a demo-only **Zymic Bank / 123** login, Supabase Postgres configuration, complaint ingestion, spike detection, analytics and synthetic-data routes. Dashboard source is present at the repository root; AI classification, investigation and approvals are not implemented. All prototype data is synthetic; no real bank or customer data is used.
+> **Status: hackathon prototype.** The backend now includes a demo-only **Zymic Bank / 123** login, Supabase Postgres configuration, complaint ingestion, spike detection, analytics and synthetic-data routes. Dashboard source is present in `frontend/`; AI classification, investigation and approvals are not implemented. All prototype data is synthetic; no real bank or customer data is used.
 >
 > **Current demo setup and API contract:** [backend/README.md](backend/README.md). Demo login is separate from Supabase Auth; supply a Supabase database connection and a random demo token secret. Registration and staff administration are hidden in demo mode. The older Supabase Auth workflow below is available only with `DEMO_MODE=false`.
 
@@ -208,7 +208,7 @@ Young Nigerian students building for the customers banks serve.
 
 - [PRD.md](PRD.md): full requirements, AI design, dashboard spec and the 72-hour plan
 
-## Frontend setup (Next.js at repository root)
+## Frontend setup (Next.js in `frontend/`)
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
@@ -217,6 +217,8 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 First, run the development server:
 
 ```bash
+cd frontend
+npm ci
 npm run dev
 # or
 yarn dev
