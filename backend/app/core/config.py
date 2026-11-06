@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     demo_password: str = "123"
     demo_token_secret: str = ""  # required: set a random secret of at least 32 characters
     demo_token_minutes: int = Field(default=120, ge=1, le=1440)
+    social_adapter_token: str = ""  # simulator/webhook bearer credential, not the Supabase service key
     auto_create_tables: bool = False  # use Alembic migrations; True only for throwaway SQLite
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 

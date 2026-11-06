@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.routes import analytics, auth, bank, complaints, health, incidents, synthetic
+from app.api.routes import analytics, auth, bank, complaints, health, incidents, synthetic, social
 
 from app.core.config import get_settings
 
@@ -14,3 +14,4 @@ api_router.include_router(incidents.router)
 api_router.include_router(analytics.router)
 if get_settings().demo_mode:
     api_router.include_router(synthetic.router)
+    api_router.include_router(social.router)

@@ -56,6 +56,8 @@ CONTEXT = re.compile(r"\b(bank|banking|transfer|debit(?:ed)?|credit(?:ed)?|accou
 
 def matches(text: str, value: str, kind: str) -> bool:
     value = value.casefold()
+    if kind == "contextual" and value == "access" and re.search(r"\baccess\s+to\b", text, re.I):
+        return False
     if kind == "handle":
         value = "@" + value.lstrip("@")
     elif kind == "hashtag":
@@ -69,7 +71,7 @@ def analyze(text: str) -> dict:
     t = text.casefold()
     rules = [
         ("fraud_scam", r"\b(scam|fraud|fake agent|fake bank agent|stolen|unauthori[sz]ed)\b"),
-        ("double_debit", r"\b(double debit|debited twice|charged twice|duplicate debit)\b"),
+        ("double_debit", r"\b(double debit|debited(?: me)? twice|charged(?: me)? twice|duplicate debit)\b"),
         ("card_atm", r"\b(atm|card)\b"),
         ("pos", r"\bpos\b"),
         ("failed_transfer", r"\b(failed transfer|transfer failed|no credit|not received|did not receive|money don enter nowhere)\b"),
