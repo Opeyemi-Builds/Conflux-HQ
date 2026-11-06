@@ -43,6 +43,8 @@ def apply_classification(db: Session, complaint: Complaint, result: ComplaintCla
     complaint.summary = result.summary
     complaint.is_fraud = result.is_fraud
     complaint.mentioned_amount = result.mentioned_amount
+    complaint.mentioned_time = result.mentioned_time
+    complaint.classification_confidence = result.confidence
     if result.language:
         complaint.language = result.language
     complaint.classified_at = utcnow()

@@ -4,7 +4,7 @@
 
 Built for the Access Youth Tech Forge hackathon, Theme 1: Payments and Financial Infrastructure.
 
-> **Status: hackathon prototype.** The backend (accounts, data model, complaint ingestion, spike detection) is built and tested. The dashboard, AI classifier, investigation agent and synthetic data generator are in progress. All prototype data is synthetic; no real bank or customer data is used.
+> **Status: hackathon prototype.** The backend, deterministic spike detection, Claude-ready classifier, bounded investigation agent, draft workflow and synthetic demo seed are implemented. The dashboard remains in progress. All prototype data is synthetic; no real bank or customer data is used.
 
 ---
 
@@ -113,7 +113,18 @@ cd backend
 pytest
 ```
 
-The tests use a fake Supabase, so no keys are needed. They cover registration, login, roles, bank isolation, PII masking and spike detection.
+The tests use a fake Supabase, so no keys are needed. They cover registration, login, roles, bank isolation, PII masking, spike detection and the AI fallback.
+
+### 4. Verify the AI without Anthropic
+
+The classifier and investigation agent use deterministic fallbacks when `ANTHROPIC_API_KEY` is empty. This is the simplest offline demo:
+
+```bash
+cd backend
+pytest tests/test_ai.py -q
+```
+
+You can also call Claude through the API by setting `ANTHROPIC_API_KEY` in `.env`. Never put a real key in source control or a frontend.
 
 ## Configuration
 

@@ -1,4 +1,9 @@
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.secret
 __pycache__/
 *.pyc
 .venv/

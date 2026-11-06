@@ -24,8 +24,19 @@ class Settings(BaseSettings):
     supabase_jwt_audience: str = "authenticated"
     site_url: str = "http://localhost:5173"  # where invite emails send people
 
+    ai_provider: str = "anthropic"
+
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-5-5"
+    anthropic_timeout_seconds: float = 15.0
+    anthropic_max_retries: int = 1
+    anthropic_max_attempts: int = 2
+
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-2.5-flash"
+    gemini_timeout_seconds: float = 15.0
+    gemini_max_retries: int = 1
+    gemini_max_attempts: int = 2
 
     spike_bucket_minutes: int = 15
     spike_baseline_hours: int = 24

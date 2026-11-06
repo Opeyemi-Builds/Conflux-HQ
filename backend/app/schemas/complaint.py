@@ -32,6 +32,8 @@ class ComplaintClassification(BaseModel):
     summary: str | None = None
     is_fraud: bool = False
     mentioned_amount: Decimal | None = None
+    mentioned_time: str | None = None
+    confidence: float = Field(0.0, ge=0, le=1)
 
 
 class ComplaintRead(BaseModel):
@@ -50,6 +52,8 @@ class ComplaintRead(BaseModel):
     summary: str | None
     is_fraud: bool
     mentioned_amount: Decimal | None
+    mentioned_time: str | None
+    classification_confidence: float | None
     transaction_id: str | None
     incident_id: uuid.UUID | None
 
