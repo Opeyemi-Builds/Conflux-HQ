@@ -50,7 +50,7 @@ class ComplaintRead(BaseModel):
     summary: str | None
     is_fraud: bool
     mentioned_amount: Decimal | None
-    transaction_id: str | None
+    transaction_id: uuid.UUID | None
     incident_id: uuid.UUID | None
 
 
