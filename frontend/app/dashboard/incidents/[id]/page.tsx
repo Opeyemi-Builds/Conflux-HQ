@@ -7,14 +7,14 @@ import { ArrowLeft, Check, CheckCircle2, ClipboardCopy, Loader2, MessageSquare, 
 import { useDash } from "@/components/dashboard/Provider";
 import { Card, IssueBadge, PageHeader, Stat, Tag, Td, TableWrap, Th } from "@/components/dashboard/ui";
 import { SpikeChart } from "@/components/dashboard/Charts";
-import { incidents, transactions } from "@/lib/mock";
+import { incidents as mockIncidents, transactions } from "@/lib/mock";
 
 export default function IncidentPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const routeParams = useParams();
   const id = resolvedParams?.id ?? (routeParams?.id as string);
-  const { role, phase, decisions, decide } = useDash();
-  const inc = incidents.find((i) => i.id === id);
+  const { role, phase, decisions, decide, incidents: liveIncidents, isBackendLive } = useDash();
+  const inc = liveIncidents.find((i) => i.id === id) || mockIncidents.find((i) => i.id === id) || liveIncidents[0] || mockIncidents[0];
   if (!inc) return <p className="text-navy/60">Incident not found. <Link href="/dashboard" className="text-flux underline">Back to overview</Link></p>;
   const d = decisions[inc.id] ?? "pending";
   const ready = phase >= 4;
@@ -22,7 +22,20 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
   return (
     <>
       <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-navy/60 hover:text-navy mb-4"><ArrowLeft className="w-4 h-4" />Overview</Link>
-      <PageHeader title={inc.title} sub={`${inc.id} · started ${inc.startedAt} · detected ${inc.detectedAt} · ${inc.region}`} right={<div className="flex gap-2"><IssueBadge i={inc.issue} /><Tag tone={inc.status === "active" ? "flux" : inc.status === "security" ? "red" : "navy"}>{inc.status}</Tag></div>} />
+      <PageHeader
+        title={inc.title}
+        sub={`${inc.id} · started ${inc.startedAt} · detected ${inc.detectedAt} · ${inc.region}`}
+        right={
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              {isBackendLive ? "Live Sync" : "Monitored"}
+            </span>
+            <IssueBadge i={inc.issue} />
+            <Tag tone={inc.status === "active" ? "flux" : inc.status === "security" ? "red" : "navy"}>{inc.status}</Tag>
+          </div>
+        }
+      />
 
       <Card className="p-6 mb-4 border-l-4 !border-l-flux">
         <p className="text-xs font-semibold tracking-wider text-flux mb-2">{role === "agent" ? "FOR CUSTOMER SERVICE" : role === "it" ? "FOR IT / ENGINEERING" : "FOR MANAGEMENT"}</p>

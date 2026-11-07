@@ -40,6 +40,7 @@ const navColumns = [
     title: "Dashboard",
     links: [
       { label: "Live Overview", href: "/dashboard" },
+      { label: "Geospatial Threat Map", href: "/dashboard/risk-map" },
       { label: "Active Incidents (INC-0421)", href: "/dashboard/incidents/INC-0421" },
       { label: "All Complaints Feed", href: "/dashboard/complaints" },
       { label: "Fraud & Security Queue", href: "/dashboard/security" },
