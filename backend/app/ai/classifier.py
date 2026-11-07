@@ -27,7 +27,11 @@ def classify(text: str, channel: str = "unknown") -> tuple[ClassificationResult,
     started = time.monotonic()
     provider = settings.ai_provider.lower().strip()
     if not active_key(settings):
-        return rules_classify(text), "rules"
+        result = rules_classify(text)
+        result._runtime = {"source": "rules", "model": active_model(settings), "prompt_version": prompt_id,
+                           "latency_ms": round((time.monotonic() - started) * 1000), "input_tokens": 0,
+                           "output_tokens": 0}
+        return result, "rules"
 
     if provider == "gemini":
         system = prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else "Classify the masked bank complaint and return JSON."

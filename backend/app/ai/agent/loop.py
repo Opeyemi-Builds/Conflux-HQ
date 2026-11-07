@@ -5,7 +5,8 @@ from pathlib import Path
 import anthropic
 from pydantic import ValidationError
 
-from app.ai.runtime import gemini_function_calls, gemini_request, gemini_schema, prompt_version, usage
+from app.ai.evidence import rank_events
+from app.ai.runtime import active_model, gemini_function_calls, gemini_request, prompt_version, usage
 from app.ai.schemas import CandidateCause, Evidence, Findings
 from app.core.config import get_settings
 from .tools import ALLOWED_TOOL_NAMES, TOOL_SCHEMAS, run_tool
@@ -16,23 +17,40 @@ PROMPT = Path(__file__).parents[1] / "prompts" / "agent_system.md"
 
 def fallback_findings(evidence: dict) -> Findings:
     incident = evidence["incident"]
-    events = evidence["events"]
-    releases = [event for event in events if event["type"] == "release"]
-    if releases and evidence["transactions"]["failed"] > 0:
-        release = releases[-1]
-        detail = f"Release {release.get('version') or 'unknown'} at {release['starts_at']} preceded the spike"
-        confidence = 0.5
+    tx = evidence.get("transactions", {})
+    ranked = rank_events(evidence)
+    releases = [item for item in ranked if item["event"].get("type") == "release"]
+    dominant_switch = tx.get("dominant_processor")
+    if not dominant_switch and tx.get("failed_by_processor"):
+        by_proc = tx["failed_by_processor"]
+        dominant_switch = max(by_proc.items(), key=lambda item: item[1])[0] if max(by_proc.values(), default=0) > 0 else None
+
+    if releases and tx.get("failed", 0) > 0:
+        top = releases[0]
+        release = top["event"]
+        switch_note = f" via {dominant_switch}" if dominant_switch else ""
+        detail = (
+            f"Release {release.get('version') or 'unknown'} on {release.get('component', 'service')} "
+            f"at {release['starts_at']} preceded the spike{switch_note}"
+        )
+        confidence = top["score"]
         source = Evidence(source="system_events", detail=detail)
     else:
         detail = f"{incident['complaint_count']} complaints against a {incident['baseline']} baseline; no confirmed single cause"
         confidence = 0.3
         source = Evidence(source="baseline", detail=detail)
+
     candidates = [CandidateCause(cause=detail, confidence=confidence, evidence=[source])]
-    return Findings(headline=detail, candidate_causes=candidates,
-                    affected_channels=list(evidence["complaints"]["channels"]),
-                    matched_transactions=evidence["transactions"]["failed"],
-                    propose_reversal_request=False,
-                    recommended_action="Verify payment-path logs and assign an incident owner. No money movement is authorized.")
+    propose_reversal = bool(tx.get("matched_complaints", 0) > 0 and tx.get("unreversed_failed", 0) > 0)
+    return Findings(
+        headline=detail,
+        candidate_causes=candidates,
+        affected_channels=list(evidence["complaints"]["channels"]),
+        affected_switch=dominant_switch,
+        matched_transactions=tx.get("failed", 0),
+        propose_reversal_request=propose_reversal,
+        recommended_action="Verify payment-path logs and assign an incident owner. No money movement is authorized.",
+    )
 
 
 def run_investigation_loop(evidence: dict, audit=None) -> tuple[Findings, str, list[dict]]:
@@ -40,11 +58,18 @@ def run_investigation_loop(evidence: dict, audit=None) -> tuple[Findings, str, l
     trace = []
     started = time.monotonic()
     prompt_id = prompt_version(PROMPT)
+    model_name = active_model(settings)
 
     def finish(findings: Findings, source: str) -> tuple[Findings, str, list[dict]]:
-        telemetry = {"telemetry": True, "source": source, "model": settings.anthropic_model,
-                     "prompt_version": prompt_id, "latency_ms": round((time.monotonic() - started) * 1000),
-                     "input_tokens": input_tokens, "output_tokens": output_tokens}
+        telemetry = {
+            "telemetry": True,
+            "source": source,
+            "model": model_name,
+            "prompt_version": prompt_id,
+            "latency_ms": round((time.monotonic() - started) * 1000),
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+        }
         trace.append(telemetry)
         if audit:
             audit(telemetry)
@@ -61,8 +86,7 @@ def run_investigation_loop(evidence: dict, audit=None) -> tuple[Findings, str, l
     if provider == "gemini":
         declarations = []
         for tool in TOOL_SCHEMAS:
-            schema = tool["input_schema"]
-            schema = dict(schema)
+            schema = dict(tool["input_schema"])
             schema.pop("title", None)
             schema.pop("additionalProperties", None)
             declarations.append({"name": tool["name"], "description": tool["description"], "parameters": schema})
@@ -116,12 +140,21 @@ def run_investigation_loop(evidence: dict, audit=None) -> tuple[Findings, str, l
         return finish(fallback_findings(evidence), "rules")
 
     messages = [{"role": "user", "content": "Investigate the incident using the evidence tools, then call submit_findings.\n" + json.dumps(evidence, default=str)}]
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=settings.anthropic_timeout_seconds,
-                                 max_retries=settings.anthropic_max_retries)
+    client = anthropic.Anthropic(
+        api_key=settings.anthropic_api_key,
+        timeout=settings.anthropic_timeout_seconds,
+        max_retries=settings.anthropic_max_retries,
+    )
     for step in range(MAX_STEPS):
         try:
-            response = client.messages.create(model=settings.anthropic_model, max_tokens=1600, temperature=0,
-                                              system=system, tools=TOOL_SCHEMAS, messages=messages)
+            response = client.messages.create(
+                model=settings.anthropic_model,
+                max_tokens=1600,
+                temperature=0,
+                system=system,
+                tools=TOOL_SCHEMAS,
+                messages=messages,
+            )
             response_input, response_output = usage(response)
             input_tokens += response_input
             output_tokens += response_output
@@ -152,8 +185,12 @@ def run_investigation_loop(evidence: dict, audit=None) -> tuple[Findings, str, l
                     content = json.dumps(result)
             else:
                 content = json.dumps({"error": f"Tool is not allowlisted: {call.name}"})
-            entry = {"step": step + 1, "tool": call.name, "input": call.input,
-                     "output": json.loads(content) if content.startswith("{") else content}
+            entry = {
+                "step": step + 1,
+                "tool": call.name,
+                "input": call.input,
+                "output": json.loads(content) if content.startswith("{") else content,
+            }
             trace.append(entry)
             if audit:
                 audit(entry)

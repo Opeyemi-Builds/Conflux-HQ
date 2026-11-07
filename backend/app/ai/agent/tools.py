@@ -22,11 +22,37 @@ def run_tool(name: str, arguments: dict, evidence: dict) -> dict:
     if name == "get_incident_stats":
         return {"complaints": evidence["complaints"], "incident": evidence["incident"]}
     if name == "search_transactions":
-        return evidence["transactions"]
+        tx = dict(evidence["transactions"])
+        switch = (arguments or {}).get("switch")
+        channel = (arguments or {}).get("channel")
+        if switch and switch in tx.get("failed_by_processor", {}):
+            tx["filtered_switch"] = switch
+            tx["filtered_failed"] = tx["failed_by_processor"][switch]
+        if channel:
+            tx["filtered_channel"] = channel
+            tx["channel_present"] = channel.lower() in [c.lower() for c in tx.get("channels", [])]
+        return tx
     if name == "get_system_events":
-        return {"events": evidence["events"]}
+        events = list(evidence.get("events", []))
+        start = (arguments or {}).get("start")
+        end = (arguments or {}).get("end")
+        if start or end:
+            filtered = [
+                e for e in events
+                if (not start or e.get("starts_at", "") >= start)
+                and (not end or e.get("starts_at", "") <= end)
+            ]
+            if filtered:
+                events = filtered
+        return {"events": events}
     if name == "compare_baseline":
-        return {"issue_type": arguments.get("issue_type"), "window_minutes": arguments.get("window_minutes"), "complaint_count": evidence["incident"]["complaint_count"], "baseline": evidence["incident"]["baseline"]}
+        return {
+            "issue_type": arguments.get("issue_type") or evidence["incident"].get("issue_type"),
+            "window_minutes": arguments.get("window_minutes", 15),
+            "complaint_count": evidence["incident"]["complaint_count"],
+            "baseline": evidence["incident"]["baseline"],
+            "growth_rate": evidence["incident"].get("growth_rate"),
+        }
     if name == "draft_message":
         return {"audience": arguments["audience"], "facts": arguments["facts"], "status": "facts_accepted_for_draft"}
     raise ValueError(f"Unknown read-only tool: {name}")
