@@ -227,6 +227,12 @@ def _handle_dispatch_approval(db: Session, job: Job) -> dict:
     return {"dispatched": True, "draft_id": str(draft.id), "kind": draft.kind.value}
 
 
+def _handle_sync_social_rules(db: Session, job: Job) -> dict:
+    from app.adapters.x_adapter import sync_stream_rules
+
+    return sync_stream_rules(db, actor="worker")
+
+
 def _execute_job(db: Session, job: Job) -> dict:
     if job.payload.get("simulate_failure"):
         raise RuntimeError("Simulated worker failure for dead-letter testing")
@@ -238,6 +244,8 @@ def _execute_job(db: Session, job: Job) -> dict:
         return _handle_investigate_incident(db, job)
     if job.kind == JobKind.DISPATCH_APPROVAL:
         return _handle_dispatch_approval(db, job)
+    if job.kind == JobKind.SYNC_SOCIAL_RULES:
+        return _handle_sync_social_rules(db, job)
     raise ValueError(f"Unsupported job kind: {job.kind}")
 
 

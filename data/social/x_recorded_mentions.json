@@ -1,0 +1,202 @@
+[
+  {
+    "data": {
+      "id": "1854000000000000001",
+      "text": "@zymicbank @confluxbankhq abeg my money don enter nowhere! I send ₦45,000 via USSD since morning, debit alert enter sharp sharp on 08031234567 but receiver never see alert.",
+      "author_id": "9001001",
+      "created_at": "2026-11-06T10:02:10Z",
+      "lang": "pcm",
+      "region": "Lagos"
+    },
+    "includes": {
+      "users": [{"id": "9001001", "username": "chinedu_lagos"}]
+    },
+    "matching_rules": [{"id": "r-zymic", "tag": "tenant:PRIMARY_BANK"}]
+  },
+  {
+    "data": {
+      "id": "1854000000000000002",
+      "text": "@zymicbank my NIP transfer of ₦25,000 on the mobile app failed after v4.2.1 update, account 0123456789 was debited with no reversal!",
+      "author_id": "9001002",
+      "created_at": "2026-11-06T10:02:30Z",
+      "lang": "en",
+      "region": "Lagos"
+    },
+    "includes": {
+      "users": [{"id": "9001002", "username": "tolu_fin"}]
+    },
+    "matching_rules": [{"id": "r-zymic", "tag": "tenant:PRIMARY_BANK"}]
+  },
+  {
+    "data": {
+      "id": "1854000000000000003",
+      "text": "@zymicbank E jowo mo ti transfer ₦60,000 on USSD, owo mi ti debited sugbon beneficiary not credited till now.",
+      "author_id": "9001003",
+      "created_at": "2026-11-06T10:03:00Z",
+      "lang": "yo",
+      "region": "Ibadan"
+    },
+    "includes": {
+      "users": [{"id": "9001003", "username": "adewale_ib"}]
+    },
+    "matching_rules": [{"id": "r-zymic", "tag": "tenant:PRIMARY_BANK"}]
+  },
+  {
+    "data": {
+      "id": "1854000000000000004",
+      "text": "@zymicbank Don Allah check my transfer of ₦18,000, an debita kudi na on the app and transfer failed without reversal.",
+      "author_id": "9001004",
+      "created_at": "2026-11-06T10:03:20Z",
+      "lang": "ha",
+      "region": "Kano"
+    },
+    "includes": {
+      "users": [{"id": "9001004", "username": "musa_kano"}]
+    },
+    "matching_rules": [{"id": "r-zymic", "tag": "tenant:PRIMARY_BANK"}]
+  },
+  {
+    "data": {
+      "id": "1854000000000000005",
+      "text": "@zymicbank Biko my transfer of ₦80,000 failed on the mobile app, ego m was debited and vendor not credited.",
+      "author_id": "9001005",
+      "created_at": "2026-11-06T10:03:45Z",
+      "lang": "ig",
+      "region": "Port Harcourt"
+    },
+    "includes": {
+      "users": [{"id": "9001005", "username": "ngozi_ph"}]
+    },
+    "matching_rules": [{"id": "r-zymic", "tag": "tenant:PRIMARY_BANK"}]
+  },
+  {
+    "data": {
+      "id": "1854000000000000006",
+      "text": "@zymicbank wetin dey happen to una transfer switch? I send ₦15,000, my money don enter nowhere and nobody dey pick call!",
+      "author_id": "9001006",
+      "created_at": "2026-11-06T10:04:10Z",
+      "lang": "pcm",
+      "region": "Abuja"
+    },
+    "includes": {
+      "users": [{"id": "9001006", "username": "kemi_abj"}]
+    },
+    "matching_rules": [{"id": "r-zymic", "tag": "tenant:PRIMARY_BANK"}]
+  },
+  {
+    "data": {
+      "id": "1854000000000000007",
+      "text": "@zymicbank failed transfer of ₦50,000 on USSD, debited without credit and still pending reversal since 10am.",
+      "author_id": "9001007",
+      "created_at": "2026-11-06T10:04:40Z",
+      "lang": "en",
+      "region": "Lagos"
+    },
+    "includes": {
+      "users": [{"id": "9001007", "username": "femi_trades"}]
+    },
+    "matching_rules": [{"id": "r-zymic", "tag": "tenant:PRIMARY_BANK"}]
+  },
+  {
+    "data": {
+      "id": "1854000000000000008",
+      "text": "@zymicbank abeg reverse my ₦32,000 sharp! Transfer failed on app, una chop my money and customer dey wait.",
+      "author_id": "9001008",
+      "created_at": "2026-11-06T10:05:05Z",
+      "lang": "pcm",
+      "region": "Lagos"
+    },
+    "includes": {
+      "users": [{"id": "9001008", "username": "obi_electronics"}]
+    },
+    "matching_rules": [{"id": "r-zymic", "tag": "tenant:PRIMARY_BANK"}]
+  },
+  {
+    "data": {
+      "id": "1854000000000000009",
+      "text": "@zymicbank another failed transfer on your mobile app today! Debited ₦110,000 with no credit to beneficiary.",
+      "author_id": "9001009",
+      "created_at": "2026-11-06T10:05:30Z",
+      "lang": "en",
+      "region": "Abuja"
+    },
+    "includes": {
+      "users": [{"id": "9001009", "username": "halima_abj"}]
+    },
+    "matching_rules": [{"id": "r-zymic", "tag": "tenant:PRIMARY_BANK"}]
+  },
+  {
+    "data": {
+      "id": "1854000000000000010",
+      "text": "@zymicbank E jowo my USSD transfer failed and owo mi ₦22,000 ti debited without reversal.",
+      "author_id": "9001010",
+      "created_at": "2026-11-06T10:06:00Z",
+      "lang": "yo",
+      "region": "Lagos"
+    },
+    "includes": {
+      "users": [{"id": "9001010", "username": "seyi_dev"}]
+    },
+    "matching_rules": [{"id": "r-zymic", "tag": "tenant:PRIMARY_BANK"}]
+  },
+  {
+    "data": {
+      "id": "1854000000000000011",
+      "text": "@zymicbank my money don enter nowhere o! ₦14,000 transfer failed on top USSD and una never reverse am.",
+      "author_id": "9001011",
+      "created_at": "2026-11-06T10:06:30Z",
+      "lang": "pcm",
+      "region": "Port Harcourt"
+    },
+    "includes": {
+      "users": [{"id": "9001011", "username": "tamuno_ph"}]
+    },
+    "matching_rules": [{"id": "r-zymic", "tag": "tenant:PRIMARY_BANK"}]
+  },
+  {
+    "data": {
+      "id": "1854000000000000012",
+      "text": "@zymicbank @accessbankplc both of una transfer switches dey fail today! My transfer of ₦40,000 failed after debit.",
+      "author_id": "9001012",
+      "created_at": "2026-11-06T10:07:00Z",
+      "lang": "pcm",
+      "region": "Lagos"
+    },
+    "includes": {
+      "users": [{"id": "9001012", "username": "amaka_enterprise"}]
+    },
+    "matching_rules": [
+      {"id": "r-zymic", "tag": "tenant:PRIMARY_BANK"},
+      {"id": "r-second", "tag": "tenant:SECONDARY_BANK"}
+    ]
+  },
+  {
+    "data": {
+      "id": "1854000000000000013",
+      "text": "@zymicbank Urgent fraud alert: someone called from 08091112233 claiming to be a fake agent and asked for my OTP!",
+      "author_id": "9001013",
+      "created_at": "2026-11-06T10:07:30Z",
+      "lang": "en",
+      "region": "Lagos"
+    },
+    "includes": {
+      "users": [{"id": "9001013", "username": "bola_ventures"}]
+    },
+    "matching_rules": [{"id": "r-zymic", "tag": "tenant:PRIMARY_BANK"}]
+  },
+  {
+    "data": {
+      "id": "1854000000000000014",
+      "text": "@zymicbank ATM for Ikeja branch debited me ₦20,000 and cash no come out since morning.",
+      "author_id": "9001014",
+      "created_at": "2026-11-06T10:08:00Z",
+      "lang": "pcm",
+      "region": "Lagos"
+    },
+    "includes": {
+      "users": [{"id": "9001014", "username": "kunle_ikeja"}]
+    },
+    "matching_rules": [{"id": "r-zymic", "tag": "tenant:PRIMARY_BANK"}]
+  }
+]
+

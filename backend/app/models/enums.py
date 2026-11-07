@@ -122,6 +122,7 @@ class JobKind(str, enum.Enum):
     DETECT_SPIKES = "detect_spikes"
     INVESTIGATE_INCIDENT = "investigate_incident"
     DISPATCH_APPROVAL = "dispatch_approval"
+    SYNC_SOCIAL_RULES = "sync_social_rules"
 
 
 class JobStatus(str, enum.Enum):

@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     demo_token_secret: str = ""  # required: set a random secret of at least 32 characters
     demo_token_minutes: int = Field(default=120, ge=1, le=1440)
     social_adapter_token: str = ""  # simulator/webhook bearer credential, not the Supabase service key
+    x_bearer_token: str | None = None  # X (Twitter) API v2 pay-per-use bearer token
+    x_api_base_url: str = "https://api.x.com/2"
+    x_daily_post_limit: int = Field(default=500, ge=1, le=2000000)  # $0.005/post cap guardrail
+    x_timeout_seconds: float = 15.0
     auto_create_tables: bool = False  # use Alembic migrations; True only for throwaway SQLite
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
