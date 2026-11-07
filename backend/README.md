@@ -105,6 +105,11 @@ All paths below have `/api/v1` prefix and require bearer authentication except h
 | GET | `/ai/evaluate` | Evaluate classifier accuracy & confusion matrix on the 100-item multilingual golden set |
 | GET | `/jobs` | Inspect queued, completed, or `dead_letter` worker jobs |
 | POST | `/jobs/drain` | Drain pending classification, detection, investigation, and approval outbox jobs |
+| GET | `/social/x/status` | Shared X v2 stream status, compiled tenant rules, and daily pay-per-use spend cap (`$0.005/post`) |
+| POST | `/social/x/sync-rules` | Idempotently diff and sync active tenant X handle rules (`(@handle OR to:handle) -is:retweet`) |
+| POST | `/social/x/pull` | Pull live mentions from X API v2 (`recent_search` or `filtered_stream`, with automatic fallback to recorded replay when `X_BEARER_TOKEN` is unset) |
+| POST | `/social/x/ingest-raw` | Ingest a native X API v2 Filtered Stream / Recent Search JSON payload through `XAdapter` |
+| POST | `/social/x/replay` | Replay recorded X v2 mention payloads (`data/social/x_recorded_mentions.json`) with optional worker drain |
 
 Analytics accept `hours` (1–720, default 24) and optional timezone-aware `at`, with an inclusive start and exclusive end. For the complete seeded dataset use **`hours=49&at=<detection_at>`**; the historical baseline plus spike spans slightly over 48 hours. URL-encode timestamps in query strings. Edge hourly buckets can be partial, so trends may contain `hours + 1` entries. Money values are decimal strings; `money_at_risk` is unverified complaint-reported exposure that may duplicate reports, not actual loss. `failed_rate` is a 0–1 fraction, not a percentage. Open-incident counts use current statuses, not reconstructed historical states.
 
