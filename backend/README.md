@@ -1,6 +1,6 @@
 # Backend demo setup
 
-FastAPI API backed by **Supabase Postgres** through SQLAlchemy. The hackathon login is deliberately separate from Supabase Auth. No real bank connections, messages, AI inference or money movements are performed.
+FastAPI API backed by **Supabase Postgres** through SQLAlchemy. The hackathon login is deliberately separate from Supabase Auth for instant demo access (`DEMO_MODE=true`), while full Supabase Auth + JWKS verification remains available (`DEMO_MODE=false`). AI classification, bounded tool-use investigation, and grounded draft generation run via **Anthropic Claude** or **Google Gemini** when API keys are configured, with deterministic multilingual fallback when offline. No live core-banking connections or real money movements are performed.
 
 ## 1. Environment
 
@@ -70,7 +70,7 @@ Pass returned `detection_at` as `now`:
 {"now":"2026-11-06T10:14:59Z"}
 ```
 
-One failed-transfer incident should be created with 30 complaints. Repeat calls do not double-count that bucket. `GET /api/v1/incidents` lists incidents and `GET /api/v1/incidents/{id}` retrieves one. Investigation and approval are not implemented; cause fields remain empty.
+One failed-transfer incident should be created with 30 complaints. Repeat calls do not double-count that bucket. `GET /api/v1/incidents` lists incidents and `GET /api/v1/incidents/{id}` retrieves one. Call `POST /api/v1/ai/incidents/{id}/investigate` (or drain queued jobs via `POST /api/v1/jobs/drain`) to run transaction matching, dynamic cause scoring, bounded agent investigation, and grounded draft generation (`customer_message`, `it_ticket`, `reversal_request`).
 
 ## 5. Frontend API reference
 
@@ -81,21 +81,30 @@ All paths below have `/api/v1` prefix and require bearer authentication except h
 | GET | `/health` | Database connectivity |
 | POST | `/auth/login` | Demo login |
 | GET | `/auth/me` | Current user and bank |
-| GET | `/analytics/summary` | Complaint totals, issue/channel/region/severity counts, fraud count, reported exposure, current open incidents |
+| GET | `/analytics/summary` | Complaint totals, issue/channel/region/severity counts, fraud count, reported exposure, open incidents, `avg_time_to_detect_seconds`, and `repeat_complaint_rate` |
 | GET | `/analytics/trends` | Zero-filled hourly UTC complaint counts |
 | GET | `/analytics/breakdown` | Issue/channel/region counts |
 | GET | `/analytics/transactions` | Transaction totals, status counts, failed fraction and amounts |
-| POST | `/synthetic/seed` | Create the demo dataset once |
+| POST | `/synthetic/seed` | Seed the 48-hour multilingual Nigerian banking dataset (`reset=true` optional) |
 | GET | `/synthetic/transactions` | Paginated synthetic transaction records; optional `status` |
 | GET | `/synthetic/system-events` | Synthetic release/maintenance evidence |
 | GET | `/complaints` | Filtered complaint feed |
 | GET | `/complaints/{id}` | Complaint detail |
-| POST | `/complaints` | Ingest a complaint with PII pattern masking |
+| POST | `/complaints` | Ingest a complaint with PII pattern masking and transactional job enqueue |
 | POST | `/complaints/bulk` | Ingest up to 5,000 complaints |
-| PATCH | `/complaints/{id}/classification` | Store caller-supplied labels, not an AI call |
-| POST | `/incidents/detect` | Explicitly run statistical detection |
+| PATCH | `/complaints/{id}/classification` | Store caller-supplied labels |
+| POST | `/complaints/{id}/classify` | Classify a stored complaint via Claude/Gemini (with rules fallback) |
+| POST | `/incidents/detect` | Explicitly run statistical spike detection |
 | GET | `/incidents` | Ranked incidents; optional `status` |
 | GET | `/incidents/{id}` | Incident detail |
+| POST | `/ai/classify` | Classify pasted complaint text |
+| POST | `/ai/incidents/{id}/investigate` | Run bounded investigation agent, cause scoring, and grounded draft generation |
+| GET | `/ai/incidents/{id}/drafts` | List generated drafts for an incident |
+| POST | `/ai/drafts/{id}/decision` | Approve or reject a draft (enqueues transactional outbox job; blocks direct reversal execution) |
+| GET | `/ai/incidents/{id}/audit` | Full audit trail for an incident |
+| GET | `/ai/evaluate` | Evaluate classifier accuracy & confusion matrix on the 100-item multilingual golden set |
+| GET | `/jobs` | Inspect queued, completed, or `dead_letter` worker jobs |
+| POST | `/jobs/drain` | Drain pending classification, detection, investigation, and approval outbox jobs |
 
 Analytics accept `hours` (1–720, default 24) and optional timezone-aware `at`, with an inclusive start and exclusive end. For the complete seeded dataset use **`hours=49&at=<detection_at>`**; the historical baseline plus spike spans slightly over 48 hours. URL-encode timestamps in query strings. Edge hourly buckets can be partial, so trends may contain `hours + 1` entries. Money values are decimal strings; `money_at_risk` is unverified complaint-reported exposure that may duplicate reports, not actual loss. `failed_rate` is a 0–1 fraction, not a percentage. Open-incident counts use current statuses, not reconstructed historical states.
 
