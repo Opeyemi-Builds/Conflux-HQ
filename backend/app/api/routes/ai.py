@@ -1,18 +1,21 @@
+from typing import Literal
 import uuid
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
 from app.ai.agent import investigate_incident
 from app.ai.classifier import classify
 from app.ai.drafts import create_drafts
-from app.api.deps import DbSession, Operator
+from app.ai.eval import evaluate_golden_set
+from app.api.deps import AuthUser, DbSession, Operator
 from app.db.base import utcnow
 from app.models import Draft, Incident
-from app.models.enums import DraftKind, DraftStatus, IncidentStatus
+from app.models.enums import DraftKind, DraftStatus, IncidentStatus, JobKind
 from app.schemas.ai import (ClassificationResponse, ClassifyRequest, DraftDecision, DraftRead,
                             InvestigationResponse)
 from app.services.audit import log_event
+from app.services.worker import enqueue_job
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -87,6 +90,14 @@ def decide_draft(draft_id: uuid.UUID, payload: DraftDecision, user: Operator, db
 
     log_event(db, bank_id=user.bank_id, actor=str(user.id), action="draft_decided", entity_type="draft",
               entity_id=str(draft.id), details={"decision": payload.decision.value, "kind": draft.kind.value})
+    if payload.decision == DraftStatus.APPROVED:
+        enqueue_job(
+            db,
+            bank_id=user.bank_id,
+            kind=JobKind.DISPATCH_APPROVAL,
+            payload={"draft_id": str(draft.id), "incident_id": str(incident.id), "kind": draft.kind.value},
+            idempotency_key=f"outbox:draft:{draft.id}",
+        )
     db.commit()
     return draft
 
@@ -101,3 +112,11 @@ def incident_audit(incident_id: uuid.UUID, user: Operator, db: DbSession):
     return [{"id": str(row.id), "actor": row.actor, "action": row.action,
              "entity_type": row.entity_type, "entity_id": row.entity_id,
              "details": row.details, "created_at": row.created_at} for row in rows]
+
+
+@router.get("/evaluate")
+def evaluate_classifier(
+    user: AuthUser,
+    mode: Literal["rules", "auto"] = Query(default="rules", description="Evaluate deterministic fallback rules or active LLM provider against the 100-item golden set."),
+):
+    return evaluate_golden_set(mode=mode)

@@ -42,6 +42,14 @@ class SummaryResponse(BreakdownResponse):
     money_at_risk: Decimal = Field(
         description="Sum of complaint mentioned_amount only (all complaints, nulls ignored). Unverified reported exposure, NOT verified financial loss; may include duplicate reports."
     )
+    avg_time_to_detect_seconds: float | None = Field(
+        default=None,
+        description="Average seconds from incident started_at to detected_at for incidents in the window.",
+    )
+    repeat_complaint_rate: float = Field(
+        default=0.0,
+        description="Fraction (0 to 1) of known customer_ref values that submitted more than one complaint in the window.",
+    )
 
 
 class TrendBucket(BaseModel):
@@ -116,6 +124,30 @@ def summary(user: AuthUser, db: DbSession, hours: Hours = 24, at: Anchor = None)
             ]),
         )
     ) or 0
+    window_incidents = db.scalars(
+        select(Incident).where(
+            Incident.bank_id == user.bank_id,
+            Incident.started_at >= window["window_start"],
+            Incident.started_at < window["window_end"],
+        )
+    ).all()
+    ttd_values = [
+        max(0.0, (inc.detected_at - inc.started_at).total_seconds())
+        for inc in window_incidents
+        if inc.detected_at and inc.started_at
+    ]
+    avg_ttd = round(sum(ttd_values) / len(ttd_values), 2) if ttd_values else None
+
+    cust_rows = db.execute(
+        select(Complaint.customer_ref, func.count())
+        .where(*scope, Complaint.customer_ref.is_not(None))
+        .group_by(Complaint.customer_ref)
+    ).all()
+    repeat_rate = (
+        round(sum(1 for _, c in cust_rows if c > 1) / len(cust_rows), 4)
+        if cust_rows
+        else 0.0
+    )
     return {
         **window,
         **_breakdown(db, scope),
@@ -124,6 +156,8 @@ def summary(user: AuthUser, db: DbSession, hours: Hours = 24, at: Anchor = None)
         "open_incidents": open_incidents,
         "fraud_count": fraud_count,
         "money_at_risk": money_at_risk,
+        "avg_time_to_detect_seconds": avg_ttd,
+        "repeat_complaint_rate": repeat_rate,
     }
 
 
