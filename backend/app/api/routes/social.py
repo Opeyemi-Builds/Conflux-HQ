@@ -19,6 +19,7 @@ from app.db.base import utcnow
 from app.models import BankAlias, Complaint, SocialReceipt
 from app.models.enums import Channel, IssueType, Sentiment, Severity
 from app.services.audit import log_event
+from app.services.complaint_service import _enqueue_for_complaint
 from app.services.demo_auth import DEMO_BANK_ID
 from app.services.social_intake import AliasBatch, AliasInput, SocialEvent, analyze, matches
 
@@ -135,6 +136,7 @@ def receive_social_event(event: SocialEvent, db: DbSession):
         is_fraud=result.get("is_fraud", False), classified_at=utcnow() if result.get("issue_type") else None)
     db.add(complaint)
     db.flush()
+    _enqueue_for_complaint(db, bank_id, complaint)
     receipt = SocialReceipt(bank_id=bank_id, platform=event.platform, post_id=event.post_id,
         complaint_id=complaint.id, source_url=event.source_url, matched_aliases=sorted(set(matched_aliases)),
         analysis_method="demo_rules_v1")

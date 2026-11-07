@@ -1,13 +1,13 @@
 """Add complaint AI extraction fields.
 
 Revision ID: 0003_ai_fields
-Revises: 0002
+Revises: 0003
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = "0003_ai_fields"
-down_revision = "0002"
+down_revision = "0003"
 branch_labels = None
 depends_on = None
 

@@ -9,7 +9,7 @@ KEYWORDS = {
     "card_atm": ("atm", "card swallowed", "cash no come out", "ego ọpụpụ", "cash no dispensed"),
     "pos": ("pos", "terminal", "merchant", "muna samun al'amari"),
     "fees": ("charge", "fee", "stamp duty", "deducted", "why una dey charge", "asuwo"),
-    "loan": ("loan", "repayment", "overdraft", "aro", "jinginar bashin", "inye mgbapụta"),
+    "loan": ("loan", "repayment", "overdraft", " aro ", "jinginar bashin", "inye mgbapụta"),
     "app_login": ("login", "log in", "otp", "app no dey open", "app crash", "token", "ba zan iya shiga"),
     "fraud_scam": ("fraud", "scam", "hack", "someone called", "asked for my otp", "unauthorised", "unauthorized", "fake agent", "gbajie mi", "ntọghọ aka", "yaudarar"),
 }

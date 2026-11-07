@@ -4,13 +4,9 @@
 
 Built for the Access Youth Tech Forge hackathon, Theme 1: Payments and Financial Infrastructure.
 
-<<<<<<< HEAD
-> **Status: hackathon prototype.** The backend, deterministic spike detection, Claude-ready classifier, bounded investigation agent, draft workflow and synthetic demo seed are implemented. The dashboard remains in progress. All prototype data is synthetic; no real bank or customer data is used.
-=======
-> **Status: hackathon prototype.** The backend now includes a demo-only **Zymic Bank / 123** login, Supabase Postgres configuration, complaint ingestion, spike detection, analytics and synthetic-data routes. Dashboard source is present in `frontend/`; AI classification, investigation and approvals are not implemented. All prototype data is synthetic; no real bank or customer data is used.
+> **Status: hackathon prototype.** The backend now includes a demo-only **Zymic Bank / 123** login, Supabase Postgres configuration, complaint ingestion, social intake adapter, deterministic spike detection, Claude/Gemini classifier with rules fallback, bounded investigation agent, draft & human-approval workflow, analytics, and synthetic-data routes. Dashboard source is present in `frontend/`. All prototype data is synthetic; no real bank or customer data is used.
 >
 > **Current demo setup and API contract:** [backend/README.md](backend/README.md). Demo login is separate from Supabase Auth; supply a Supabase database connection and a random demo token secret. Registration and staff administration are hidden in demo mode. The older Supabase Auth workflow below is available only with `DEMO_MODE=false`.
->>>>>>> origin/main
 
 ---
 
