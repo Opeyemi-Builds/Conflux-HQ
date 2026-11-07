@@ -115,3 +115,17 @@ class MemberStatus(str, enum.Enum):
 class BankStatus(str, enum.Enum):
     ACTIVE = "active"
     SUSPENDED = "suspended"
+
+
+class JobKind(str, enum.Enum):
+    CLASSIFY_COMPLAINT = "classify_complaint"
+    DETECT_SPIKES = "detect_spikes"
+    INVESTIGATE_INCIDENT = "investigate_incident"
+    DISPATCH_APPROVAL = "dispatch_approval"
+
+
+class JobStatus(str, enum.Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    DEAD_LETTER = "dead_letter"

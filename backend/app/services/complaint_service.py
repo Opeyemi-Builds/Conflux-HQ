@@ -1,11 +1,16 @@
 import uuid
+from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.privacy import mask_pii, pseudonymise
 from app.db.base import utcnow
 from app.models import Complaint
+from app.models.enums import JobKind
 from app.schemas.complaint import ComplaintClassification, ComplaintCreate
+from app.services.spike_detection import bucket_start
+from app.services.worker import enqueue_job
 
 
 def build_complaint(bank_id: uuid.UUID, data: ComplaintCreate) -> Complaint:
@@ -23,17 +28,46 @@ def build_complaint(bank_id: uuid.UUID, data: ComplaintCreate) -> Complaint:
     )
 
 
+def _enqueue_for_complaint(db: Session, bank_id: uuid.UUID, complaint: Complaint) -> None:
+    if complaint.issue_type is None:
+        enqueue_job(
+            db,
+            bank_id=bank_id,
+            kind=JobKind.CLASSIFY_COMPLAINT,
+            payload={"complaint_id": str(complaint.id)},
+            idempotency_key=f"classify:{complaint.id}",
+        )
+    else:
+        minutes = get_settings().spike_bucket_minutes
+        b_start = bucket_start(complaint.occurred_at, minutes)
+        detect_at = b_start + timedelta(minutes=minutes - 1, seconds=59)
+        enqueue_job(
+            db,
+            bank_id=bank_id,
+            kind=JobKind.DETECT_SPIKES,
+            payload={"now": detect_at.isoformat()},
+            idempotency_key=f"detect:{b_start.isoformat()}",
+            reopen_completed=True,
+        )
+
+
 def create_complaint(db: Session, bank_id: uuid.UUID, data: ComplaintCreate) -> Complaint:
     complaint = build_complaint(bank_id, data)
     db.add(complaint)
+    db.flush()
+    _enqueue_for_complaint(db, bank_id, complaint)
     db.commit()
     return complaint
 
 
 def create_complaints_bulk(db: Session, bank_id: uuid.UUID, items: list[ComplaintCreate]) -> int:
-    db.add_all([build_complaint(bank_id, item) for item in items])
+    rows = [build_complaint(bank_id, item) for item in items]
+    db.add_all(rows)
+    db.flush()
+    for row in rows:
+        _enqueue_for_complaint(db, bank_id, row)
     db.commit()
-    return len(items)
+    return len(rows)
 
 
 def apply_classification(db: Session, complaint: Complaint, result: ComplaintClassification) -> Complaint:
