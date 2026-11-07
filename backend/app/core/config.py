@@ -35,13 +35,15 @@ class Settings(BaseSettings):
     ai_provider: str = "anthropic"
 
     anthropic_api_key: str | None = None
-    anthropic_model: str = "claude-sonnet-5-5"
+    anthropic_model: str = "claude-sonnet-4-20250514"
+    anthropic_fast_model: str = "claude-3-5-haiku-latest"
     anthropic_timeout_seconds: float = 15.0
     anthropic_max_retries: int = 1
     anthropic_max_attempts: int = 2
 
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.5-flash"
+    gemini_fast_model: str = "gemini-2.5-flash"
     gemini_timeout_seconds: float = 15.0
     gemini_max_retries: int = 1
     gemini_max_attempts: int = 2
