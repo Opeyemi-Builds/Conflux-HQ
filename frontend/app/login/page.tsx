@@ -48,13 +48,24 @@ export default function LoginPage() {
     setError(null);
     setSuccessMsg(null);
     try {
-      const res = await api.login(identifier.trim(), password);
-      setSuccessMsg(
-        `Authenticated as ${res.user?.full_name || identifier} (${res.user?.bank?.name || identifier}). Redirecting…`
-      );
+      await api.login(identifier.trim(), password);
       router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Authentication failed. Please check your credentials.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDemo = async () => {
+    setLoading(true);
+    setError(null);
+    setSuccessMsg(null);
+    try {
+      await api.enterDemo();
+      router.push("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Demo access is unavailable.");
     } finally {
       setLoading(false);
     }
@@ -75,7 +86,12 @@ export default function LoginPage() {
         email: email.trim(),
         password: regPassword,
       });
-      setSuccessMsg(`Bank tenant '${res.user?.bank?.name || bankName}' provisioned. Redirecting to console…`);
+      if (res.email_confirmation_required) {
+        setMode("login");
+        setIdentifier(email.trim());
+        setSuccessMsg("Check your email to confirm your account, then sign in.");
+        return;
+      }
       router.push("/dashboard");
     } catch (err) {
       setError(
@@ -237,16 +253,17 @@ export default function LoginPage() {
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-navy/60 mb-1.5">
-                    Bank Name or Operator Email
+                    Operator email
                   </label>
                   <div className="relative">
                     <Building2 className="w-4 h-4 text-navy/40 absolute left-4 top-1/2 -translate-y-1/2" />
                     <input
-                      type="text"
+                      type="email"
+                      autoComplete="username"
                       required
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
-                      placeholder="Enter bank name or operator email"
+                      placeholder="Enter operator email"
                       className="w-full rounded-2xl bg-navy/[0.03] border border-navy/10 pl-11 pr-4 py-3 text-sm text-navy outline-none focus:border-flux focus:bg-white transition-colors"
                     />
                   </div>
@@ -293,6 +310,10 @@ export default function LoginPage() {
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
+                </button>
+                <button type="button" disabled={loading} onClick={handleDemo}
+                  className="w-full rounded-xl border border-navy/20 py-3 text-sm font-medium text-navy disabled:opacity-50">
+                  Enter demo
                 </button>
               </form>
             </div>

@@ -247,7 +247,9 @@ def test_live_x_api_v2_sync_and_recent_search_pull(monkeypatch):
         search_call = [c for c in captured_calls if c["url"].endswith("/tweets/search/recent")][0]
         assert search_call["headers"]["Authorization"] == "Bearer test-x-bearer-token-123"
         assert search_call["params"]["max_results"] == 10  # clamped to X v2 minimum of 10
-        assert search_call["params"]["tweet.fields"] == "created_at,author_id,lang"
+        assert set(search_call["params"]["tweet.fields"].split(",")) == {
+            "created_at", "author_id", "lang", "public_metrics", "conversation_id",
+        }
         assert search_call["params"]["expansions"] == "author_id"
         assert search_call["params"]["user.fields"] == "username,name"
         assert "@zymicbank" in search_call["params"]["query"]

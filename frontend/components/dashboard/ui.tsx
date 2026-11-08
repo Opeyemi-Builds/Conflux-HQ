@@ -13,7 +13,7 @@ export function PageHeader({ title, sub, right }: { title: string; sub?: string;
   );
 }
 const sev: Record<Severity, string> = { low: "bg-navy/5 text-navy/70", medium: "bg-amber-100 text-amber-800", high: "bg-flux/15 text-[#b84d0e]", critical: "bg-red-100 text-red-700" };
-export const SeverityBadge = ({ s }: { s: Severity }) => <span className={`px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${sev[s]}`}>{s}</span>;
+export const SeverityBadge = ({ s }: { s: Severity | null }) => <span className={`px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${s ? sev[s] : "bg-navy/5 text-navy/60"}`}>{s ?? "Unclassified"}</span>;
 export const IssueBadge = ({ i }: { i: IssueType }) => <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${i === "fraud_scam" ? "bg-red-50 text-red-700" : "bg-navy/5 text-navy/80"}`}>{ISSUE_LABEL[i]}</span>;
 export const Tag = ({ children, tone = "navy" }: { children: ReactNode; tone?: "navy" | "flux" | "green" | "red" }) => {
   const t = { navy: "bg-navy/5 text-navy/70", flux: "bg-flux/15 text-[#b84d0e]", green: "bg-emerald-100 text-emerald-700", red: "bg-red-100 text-red-700" }[tone];

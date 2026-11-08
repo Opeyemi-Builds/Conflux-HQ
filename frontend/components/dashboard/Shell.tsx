@@ -1,6 +1,7 @@
 "use client";
+import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   BarChart3,
@@ -11,6 +12,8 @@ import {
   LogOut,
   MapPin,
   RefreshCw,
+  Receipt,
+  Radio,
   ScrollText,
   ShieldAlert,
   Siren,
@@ -19,9 +22,9 @@ import LogoIcon from "@/components/LogoIcon";
 import { useDash } from "./Provider";
 
 export default function Shell({ children }: { children: React.ReactNode }) {
+  const [scanError, setScanError] = useState(false);
   const path = usePathname();
-  const router = useRouter();
-  const { detectNow, syncing, complaints, incidents, user, logoutUser, isBackendLive } = useDash();
+  const { detectNow, syncing, complaints, incidents, user, logoutUser, isBackendLive, lastRefresh } = useDash();
 
   const primaryIncidentId = incidents[0]?.id || "latest";
   const nav = [
@@ -29,6 +32,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     { href: "/dashboard/risk-map", label: "Geo Risk Map", icon: MapPin },
     { href: `/dashboard/incidents/${primaryIncidentId}`, label: "Incidents", icon: Siren },
     { href: "/dashboard/complaints", label: "Complaints", icon: List },
+    { href: "/dashboard/reconciliation", label: "Reconciliation", icon: Receipt },
+    { href: "/dashboard/social", label: "Social monitoring", icon: Radio },
     { href: "/dashboard/security", label: "Security queue", icon: ShieldAlert },
     { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
     { href: "/dashboard/audit", label: "Audit log", icon: ScrollText },
@@ -37,11 +42,6 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const active = (h: string) =>
     h === "/dashboard" ? path === h : path.startsWith(h.split("/").slice(0, 3).join("/"));
   const fraudCount = complaints.filter((c) => c.isFraud || c.issue === "fraud_scam").length;
-
-  const handleSignOut = () => {
-    logoutUser();
-    router.push("/login");
-  };
 
   return (
     <div className="min-h-screen bg-cream lg:flex">
@@ -70,7 +70,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               </div>
             </div>
             <button
-              onClick={handleSignOut}
+              onClick={logoutUser}
               title="Sign out"
               className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors shrink-0"
             >
@@ -145,6 +145,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-3">
+            <button type="button" onClick={logoutUser} className="text-xs underline lg:hidden">Sign out</button>
+            <span className="hidden text-xs text-navy/60 md:inline">
+              {lastRefresh ? `${isBackendLive ? "Polled" : "Stale"} · ${lastRefresh.slice(11, 19) + " UTC"}` : "Awaiting first refresh"}
+            </span>
             <Link
               href="/login"
               className="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium text-navy/75 bg-white hover:bg-navy/[0.03] rounded-full px-3.5 py-1.5 border border-navy/[0.08] transition-colors"
@@ -152,8 +156,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               {user?.email || "Switch Account"}
             </Link>
             <button
-              onClick={detectNow}
-              disabled={syncing}
+              onClick={async () => {
+                setScanError(false);
+                try { await detectNow(); } catch { setScanError(true); }
+              }}
+              disabled={syncing || user?.role === "manager"}
               className="inline-flex items-center gap-2 bg-navy text-white text-sm font-semibold px-4 py-2 rounded-full hover:bg-navy-600 disabled:opacity-80 transition-colors shadow-sm"
             >
               {syncing ? (
@@ -161,10 +168,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               ) : (
                 <RefreshCw className="w-4 h-4 text-flux" />
               )}
-              {syncing ? "Scanning Spikes…" : "Scan & Sync Live"}
+              {syncing ? "Scanning Spikes…" : "Run spike detection"}
             </button>
           </div>
         </header>
+        {scanError && <p role="alert" className="px-4 py-2 text-sm text-red-700">Spike detection failed. Try again.</p>}
         <div className="lg:hidden flex gap-1 overflow-x-auto px-4 py-2 bg-navy">
           {nav.map(({ href, label }) => (
             <Link

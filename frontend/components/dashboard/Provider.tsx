@@ -1,4 +1,6 @@
 "use client";
+import type { XResult } from "@/lib/social";
+import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   ISSUE_LABEL,
@@ -13,7 +15,6 @@ import {
   type Sentiment,
   type Severity,
   type TraceStep,
-  type Txn,
 } from "@/lib/types";
 import {
   api,
@@ -22,22 +23,17 @@ import {
   type BackendComplaint,
   type BackendDraft,
   type BackendIncident,
-  type BackendSystemEvent,
-  type BackendTransactionItem,
   type BackendTransactionsAnalytics,
   type BackendTrendBucket,
   type BackendUser,
 } from "@/lib/api";
 
 interface Ctx {
-  decisions: Record<string, Decision>;
-  decide: (id: string, d: Exclude<Decision, "pending">, draftId?: string) => Promise<void>;
+  decide: (draftId: string, d: Exclude<Decision, "pending">) => Promise<BackendDraft>;
   audit: AuditEntry[];
   complaints: Complaint[];
   incidents: Incident[];
-  transactions: Txn[];
   transactionsAnalytics: BackendTransactionsAnalytics | null;
-  systemEvents: BackendSystemEvent[];
   summary: BackendAnalyticsSummary | null;
   hourlySeries: HourlyBucket[];
   channelSplit: { name: string; value: number }[];
@@ -45,22 +41,14 @@ interface Ctx {
   rootCauses: { name: string; value: number }[];
   detectTrend: { d: string; min: number }[];
   addComplaint: (c: Partial<Complaint> & { text: string }) => Promise<void>;
-  pullSocialX: () => Promise<{ fetched: number; ingested: number }>;
+  pullSocialX: () => Promise<XResult>;
   investigate: (incidentId: string) => Promise<void>;
   detectNow: () => Promise<void>;
   syncing: boolean;
   user: BackendUser | null;
   isAuthenticated: boolean;
-  loginUser: (identifier: string, password: string) => Promise<BackendUser | null>;
-  registerBankTenant: (payload: {
-    bank_name: string;
-    cac_number?: string;
-    country?: string;
-    admin_full_name: string;
-    email: string;
-    password: string;
-  }) => Promise<BackendUser | null>;
   logoutUser: () => void;
+  lastRefresh: string | null;
   isBackendLive: boolean;
   isLoading: boolean;
   refresh: () => Promise<void>;
@@ -102,7 +90,7 @@ function formatLanguage(lang?: string | null): string {
   return clean.charAt(0).toUpperCase() + clean.slice(1);
 }
 
-function mapBackendComplaint(b: BackendComplaint): Complaint {
+export function mapBackendComplaint(b: BackendComplaint): Complaint {
   const channelMap: Record<string, Channel> = {
     x: "X",
     instagram: "Instagram",
@@ -115,8 +103,8 @@ function mapBackendComplaint(b: BackendComplaint): Complaint {
   };
   const channel: Channel = channelMap[b.channel?.toLowerCase()] || "In-app";
   const issue: IssueType = (b.issue_type as IssueType) || "other";
-  const severity: Severity = (b.severity as Severity) || "low";
-  const sentiment: Sentiment = (b.sentiment as Sentiment) || "neutral";
+  const severity = (b.severity as Severity | null) ?? null;
+  const sentiment = (b.sentiment as Sentiment | null) ?? null;
   const amt = b.mentioned_amount != null ? Number(b.mentioned_amount) : null;
 
   return {
@@ -134,42 +122,10 @@ function mapBackendComplaint(b: BackendComplaint): Complaint {
     region: b.region || "—",
     ref: b.customer_ref ? `****${b.customer_ref.slice(-4)}` : `****${b.id.slice(0, 4)}`,
     amount: amt,
-    isFraud: Boolean(b.is_fraud || issue === "fraud_scam"),
+    isFraud: b.is_fraud ?? undefined,
     confidence: b.classification_confidence,
     transactionId: b.transaction_id,
     incidentId: b.incident_id,
-  };
-}
-
-function mapBackendTransaction(t: BackendTransactionItem): Txn {
-  const amt = Number(t.amount || 0);
-  const channelLabel =
-    t.txn_channel?.toUpperCase() === "USSD"
-      ? "USSD"
-      : t.txn_channel
-      ? t.txn_channel.charAt(0).toUpperCase() + t.txn_channel.slice(1)
-      : "—";
-  const typeLabel = t.txn_type
-    ? t.txn_type.charAt(0).toUpperCase() + t.txn_type.slice(1)
-    : "—";
-  const statusLabel = t.status === "failed" ? "Debited, not credited" : t.status;
-  const revLabel =
-    t.reversal_status === "pending"
-      ? "Pending"
-      : t.reversal_status === "reversed"
-      ? "Reversed"
-      : t.reversal_status || "—";
-  return {
-    id: t.id,
-    ref: t.reference,
-    time: formatTimeHHMM(t.occurred_at),
-    type: typeLabel,
-    channel: channelLabel,
-    amount: `₦${amt.toLocaleString()}`,
-    status: statusLabel,
-    reversal: revLabel,
-    switch: t.processor || "—",
-    region: t.region || "—",
   };
 }
 
@@ -219,48 +175,37 @@ function mapBackendAudit(a: BackendAuditEntry): AuditEntry {
   };
 }
 
-function buildIncidentFromBackend(
+export function buildIncidentFromBackend(
   b: BackendIncident,
   drafts: BackendDraft[],
   auditRows: BackendAuditEntry[],
-  allComplaints: Complaint[],
-  events: BackendSystemEvent[]
+  allComplaints: Complaint[]
 ): Incident {
   const issue = (b.issue_type as IssueType) || "other";
-  const issueComplaints = allComplaints.filter((c) => c.incidentId === b.id || c.issue === issue);
+  const issueComplaints = allComplaints.filter((c) => c.incidentId === b.id);
   const totalExposure = issueComplaints.reduce((acc, c) => acc + (c.amount || 0), 0);
 
   // Build time series strictly from backend complaint timestamps
   const bucketMap = new Map<string, number>();
   issueComplaints.forEach((c) => {
-    if (c.time && c.time !== "—") {
-      bucketMap.set(c.time, (bucketMap.get(c.time) || 0) + 1);
+    if (c.occurredAt) {
+      const minute = new Date(c.occurredAt).toISOString().slice(0, 16);
+      bucketMap.set(minute, (bucketMap.get(minute) || 0) + 1);
     }
   });
   const sortedTimes = Array.from(bucketMap.keys()).sort().slice(-16);
   const series = sortedTimes.map((k) => bucketMap.get(k) || 0);
-  const labels = sortedTimes;
+  const labels = sortedTimes.map((time) => time.replace("T", " ") + " UTC");
 
-  const confPct = b.cause_confidence != null ? Math.round(b.cause_confidence * 100) : 0;
+  const confPct = b.cause_confidence != null ? Math.round(b.cause_confidence * 100) : null;
   const causes: Cause[] = [];
   if (b.likely_cause) {
     causes.push({
-      name: b.likely_cause.split(" preceded ")[0] || b.likely_cause,
+      name: b.likely_cause,
       confidence: confPct,
       evidence: b.summary || b.likely_cause,
     });
   }
-  events.forEach((ev) => {
-    const label = `${ev.event_type.toUpperCase()} ${ev.version || ""} · ${ev.component}`.trim();
-    if (!causes.some((c) => c.name.includes(ev.component))) {
-      causes.push({
-        name: label,
-        confidence: ev.event_type === "release" ? Math.max(50, confPct - 10) : 10,
-        evidence: ev.description,
-      });
-    }
-  });
-
   const toolLogs = auditRows.filter((r) => r.action === "agent_tool_call");
   const trace: TraceStep[] = toolLogs.map((r) => {
     const d = r.details || {};
@@ -284,8 +229,6 @@ function buildIncidentFromBackend(
     new Set(issueComplaints.map((c) => c.region).filter((r) => r && r !== "—"))
   ).slice(0, 4);
   const regionStr = regionSet.length > 0 ? regionSet.join(", ") : "—";
-
-  const releaseEv = events.find((e) => e.event_type === "release");
 
   return {
     id: b.id,
@@ -317,7 +260,6 @@ function buildIncidentFromBackend(
     moneyAtRisk: formatNaira(totalExposure),
     series,
     labels,
-    releaseLabel: releaseEv ? `${releaseEv.component} ${releaseEv.version || ""}`.trim() : undefined,
     causes,
     trace,
     summary: b.summary || b.likely_cause || `${b.complaint_count} complaints linked to this incident.`,
@@ -339,98 +281,105 @@ function buildIncidentFromBackend(
 }
 
 export default function DashboardProvider({ children }: { children: React.ReactNode }) {
-  const [decisions, setDecisions] = useState<Record<string, Decision>>({});
+  const router = useRouter();
+  const [user, setUser] = useState<BackendUser | null>(null);
+  const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    const endSession = () => {
+      active = false;
+      setUser(null);
+      router.replace("/login");
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === "conflux_demo_token" || event.key === null) endSession();
+    };
+    window.addEventListener("conflux:logout", endSession);
+    window.addEventListener("storage", onStorage);
+    if (api.hasStoredToken()) {
+      api.getMe().then((me) => {
+        if (active) setUser(me);
+      }).catch(() => {
+        if (!active) return;
+        if (api.hasStoredToken()) setError(true);
+        else api.logout();
+      });
+    } else {
+      api.logout();
+    }
+    return () => {
+      active = false;
+      window.removeEventListener("conflux:logout", endSession);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [attempt, router]);
+
+  if (user) return <AuthenticatedDashboard user={user}>{children}</AuthenticatedDashboard>;
+
+  return (
+    <div className="min-h-screen bg-cream flex items-center justify-center gap-4 p-8 text-navy">
+      {error ? (
+        <>
+          <p role="alert">Could not verify your session.</p>
+          <button type="button" onClick={() => { setError(false); setAttempt(attempt + 1); }}>
+            Retry
+          </button>
+        </>
+      ) : <p role="status">Checking session…</p>}
+    </div>
+  );
+}
+
+function AuthenticatedDashboard({ children, user }: { children: React.ReactNode; user: BackendUser }) {
   const [backendComplaints, setBackendComplaints] = useState<Complaint[]>([]);
   const [backendIncidents, setBackendIncidents] = useState<Incident[]>([]);
-  const [transactions, setTransactions] = useState<Txn[]>([]);
   const [transactionsAnalytics, setTransactionsAnalytics] = useState<BackendTransactionsAnalytics | null>(null);
-  const [systemEvents, setSystemEvents] = useState<BackendSystemEvent[]>([]);
   const [trendBuckets, setTrendBuckets] = useState<BackendTrendBucket[]>([]);
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
   const [summary, setSummary] = useState<BackendAnalyticsSummary | null>(null);
-  const [user, setUser] = useState<BackendUser | null>(null);
+  const [lastRefresh, setLastRefresh] = useState<string | null>(null);
   const [isBackendLive, setIsBackendLive] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const investigatedRef = useRef<Set<string>>(new Set());
+  const inFlight = useRef<Promise<void> | null>(null);
 
-  const fetchBackendData = useCallback(async () => {
+  const canOperate = user.role !== "manager";
+  const loadBackendData = useCallback(async () => {
     try {
-      await api.getAuthToken();
-
-      const [
-        meRes,
-        rawComplaints,
-        rawIncidents,
-        sumRes,
-        trendsRes,
-        txAnalyticsRes,
-        txListRes,
-        eventsRes,
-        bankAuditRes,
-      ] = await Promise.all([
-        api.getMe().catch(() => null),
+      const [complaintsResult, incidentsResult, summaryResult, trendsRes, txAnalyticsRes, bankAuditRes] = await Promise.allSettled([
         api.getComplaints({ limit: 500 }),
         api.getIncidents(),
         api.getSummary(72),
-        api.getTrends(72).catch(() => null),
-        api.getTransactionsAnalytics(72).catch(() => null),
-        api.getTransactions({ status: "failed", limit: 25 }).catch(() => ({ total: 0, items: [] })),
-        api.getSystemEvents(20).catch(() => ({ items: [] })),
-        api.getBankAudit(120).catch(() => []),
+        api.getTrends(72),
+        api.getTransactionsAnalytics(72),
+        api.getBankAudit(120),
       ]);
-
-      if (meRes) setUser(meRes);
+      if (complaintsResult.status === "rejected") throw complaintsResult.reason;
+      if (incidentsResult.status === "rejected") throw incidentsResult.reason;
+      if (summaryResult.status === "rejected") throw summaryResult.reason;
+      const rawComplaints = complaintsResult.value;
+      const rawIncidents = incidentsResult.value;
+      const sumRes = summaryResult.value;
 
       const mappedComplaints = (rawComplaints || []).map(mapBackendComplaint);
       setBackendComplaints(mappedComplaints);
 
       if (sumRes) setSummary(sumRes);
-      if (trendsRes?.buckets) setTrendBuckets(trendsRes.buckets);
-      if (txAnalyticsRes) setTransactionsAnalytics(txAnalyticsRes);
-      if (txListRes?.items) setTransactions(txListRes.items.map(mapBackendTransaction));
-      if (eventsRes?.items) setSystemEvents(eventsRes.items);
-      if (bankAuditRes) setAuditEntries(bankAuditRes.map(mapBackendAudit));
-
-      let currentRawIncidents = rawIncidents || [];
-      if (currentRawIncidents.length === 0 && mappedComplaints.length > 0) {
-        const latestOccurred = rawComplaints[0]?.occurred_at;
-        currentRawIncidents = await api.detectSpikes(latestOccurred).catch(() => []);
-      }
+      setTrendBuckets(trendsRes.status === "fulfilled" ? trendsRes.value.buckets : []);
+      setTransactionsAnalytics(txAnalyticsRes.status === "fulfilled" ? txAnalyticsRes.value : null);
+      if (bankAuditRes.status === "fulfilled") setAuditEntries(bankAuditRes.value.map(mapBackendAudit));
 
       const enrichedIncidents: Incident[] = await Promise.all(
-        currentRawIncidents.map(async (inc) => {
-          if (!inc.likely_cause && !investigatedRef.current.has(inc.id)) {
-            investigatedRef.current.add(inc.id);
-            await api.investigateIncident(inc.id).catch(() => null);
-            inc = await api.getIncident(inc.id).catch(() => inc);
-          }
-          const [drafts, incAudit] = await Promise.all([
-            api.getIncidentDrafts(inc.id).catch(() => [] as BackendDraft[]),
-            api.getIncidentAudit(inc.id).catch(() => [] as BackendAuditEntry[]),
-          ]);
-          return buildIncidentFromBackend(inc, drafts, incAudit, mappedComplaints, eventsRes?.items || []);
+        rawIncidents.map(async (inc) => {
+          const drafts = canOperate ? await api.getIncidentDrafts(inc.id).catch(() => []) : [];
+          return buildIncidentFromBackend(inc, drafts, [], mappedComplaints);
         })
       );
 
-      const nextDecisions: Record<string, Decision> = {};
-      enrichedIncidents.forEach((inc) => {
-        if (inc.drafts && inc.drafts.length > 0) {
-          const allApproved = inc.drafts.every((d) => d.status === "approved");
-          const anyRejected = inc.drafts.some((d) => d.status === "rejected");
-          const cust = inc.drafts.find((d) => d.kind === "customer_message");
-          nextDecisions[inc.id] = allApproved
-            ? "approved"
-            : anyRejected
-            ? "rejected"
-            : cust?.status || "pending";
-          inc.drafts.forEach((d) => {
-            nextDecisions[d.id] = d.status;
-          });
-        }
-      });
-      setDecisions((prev) => ({ ...prev, ...nextDecisions }));
       setBackendIncidents(enrichedIncidents);
+      setLastRefresh(new Date().toISOString());
       setIsBackendLive(true);
       setIsLoading(false);
     } catch (err) {
@@ -438,7 +387,16 @@ export default function DashboardProvider({ children }: { children: React.ReactN
       setIsBackendLive(false);
       setIsLoading(false);
     }
-  }, []);
+  }, [canOperate]);
+
+  const fetchBackendData = useCallback(() => {
+    if (!inFlight.current) {
+      inFlight.current = loadBackendData().finally(() => {
+        inFlight.current = null;
+      });
+    }
+    return inFlight.current;
+  }, [loadBackendData]);
 
   useEffect(() => {
     let active = true;
@@ -454,39 +412,7 @@ export default function DashboardProvider({ children }: { children: React.ReactN
     };
   }, [fetchBackendData]);
 
-  const loginUser = useCallback(
-    async (identifier: string, password: string): Promise<BackendUser | null> => {
-      const res = await api.login(identifier, password);
-      const me = res.user || (await api.getMe().catch(() => null));
-      if (me) setUser(me);
-      await fetchBackendData();
-      return me;
-    },
-    [fetchBackendData]
-  );
-
-  const registerBankTenant = useCallback(
-    async (payload: {
-      bank_name: string;
-      cac_number?: string;
-      country?: string;
-      admin_full_name: string;
-      email: string;
-      password: string;
-    }): Promise<BackendUser | null> => {
-      const res = await api.registerBank(payload);
-      const me = res.user || (await api.getMe().catch(() => null));
-      if (me) setUser(me);
-      await fetchBackendData();
-      return me;
-    },
-    [fetchBackendData]
-  );
-
-  const logoutUser = useCallback(() => {
-    api.logout();
-    setUser(null);
-  }, []);
+  const logoutUser = useCallback(() => api.logout(), []);
 
   // Run live spike detection & refresh backend state
   const detectNow = useCallback(async () => {
@@ -494,10 +420,7 @@ export default function DashboardProvider({ children }: { children: React.ReactN
     try {
       const latestOccurred = backendComplaints[0]?.occurredAt;
       await api.detectSpikes(latestOccurred);
-      await api.drainJobs().catch(() => null);
       await fetchBackendData();
-    } catch (err) {
-      console.warn("Spike detection error:", err);
     } finally {
       setSyncing(false);
     }
@@ -512,26 +435,12 @@ export default function DashboardProvider({ children }: { children: React.ReactN
   );
 
   const decide = useCallback(
-    async (id: string, d: Exclude<Decision, "pending">, specificDraftId?: string) => {
-      setDecisions((s) => ({ ...s, [id]: d, ...(specificDraftId ? { [specificDraftId]: d } : {}) }));
-
-      try {
-        if (specificDraftId) {
-          await api.decideDraft(specificDraftId, d);
-        } else {
-          const targetInc = backendIncidents.find((i) => i.id === id);
-          const pendingDrafts = (targetInc?.drafts || []).filter(
-            (dr) => dr.status === "pending" && dr.kind !== "reversal_request"
-          );
-          await Promise.all(pendingDrafts.map((dr) => api.decideDraft(dr.id, d).catch(() => null)));
-        }
-        await api.drainJobs().catch(() => null);
-        await fetchBackendData();
-      } catch (err) {
-        console.warn("Draft decision error:", err);
-      }
+    async (draftId: string, decision: Exclude<Decision, "pending">) => {
+      const draft = await api.decideDraft(draftId, decision);
+      await fetchBackendData();
+      return draft;
     },
-    [backendIncidents, fetchBackendData]
+    [fetchBackendData]
   );
 
   const addComplaint = useCallback(
@@ -544,10 +453,7 @@ export default function DashboardProvider({ children }: { children: React.ReactN
         text: c.text,
         channel: channelBackend,
         region: c.region,
-        language: c.language?.toLowerCase(),
-        issue_type: c.issue,
       });
-      await api.drainJobs().catch(() => null);
       await fetchBackendData();
     },
     [fetchBackendData]
@@ -556,7 +462,7 @@ export default function DashboardProvider({ children }: { children: React.ReactN
   const pullSocialX = useCallback(async () => {
     const res = await api.pullXPosts(15);
     await fetchBackendData();
-    return { fetched: res.fetched, ingested: res.ingested };
+    return res;
   }, [fetchBackendData]);
 
   const hourlySeries = useMemo<HourlyBucket[]>(() => {
@@ -564,7 +470,8 @@ export default function DashboardProvider({ children }: { children: React.ReactN
     const buckets = new Map<string, HourlyBucket>();
     backendComplaints.forEach((c) => {
       if (!c.time || c.time === "—") return;
-      const hourKey = `${c.time.slice(0, 2)}:00`;
+      if (!c.occurredAt) return;
+      const hourKey = new Date(c.occurredAt).toISOString().slice(0, 13).replace("T", " ") + ":00 UTC";
       const existing = buckets.get(hourKey) || {
         h: hourKey,
         failed_transfer: 0,
@@ -643,7 +550,7 @@ export default function DashboardProvider({ children }: { children: React.ReactN
   const detectTrend = useMemo(() => {
     if (trendBuckets.length > 0) {
       return trendBuckets.slice(-12).map((b) => ({
-        d: formatTimeHHMM(b.bucket_start),
+        d: new Date(b.bucket_start).toISOString().slice(0, 16).replace("T", " ") + " UTC",
         min: b.total_complaints,
       }));
     }
@@ -656,14 +563,11 @@ export default function DashboardProvider({ children }: { children: React.ReactN
   return (
     <C.Provider
       value={{
-        decisions,
         decide,
         audit: auditEntries,
         complaints: backendComplaints,
         incidents: backendIncidents,
-        transactions,
         transactionsAnalytics,
-        systemEvents,
         summary,
         hourlySeries,
         channelSplit,
@@ -677,9 +581,8 @@ export default function DashboardProvider({ children }: { children: React.ReactN
         syncing,
         user,
         isAuthenticated: Boolean(user),
-        loginUser,
-        registerBankTenant,
         logoutUser,
+        lastRefresh,
         isBackendLive,
         isLoading,
         refresh: fetchBackendData,

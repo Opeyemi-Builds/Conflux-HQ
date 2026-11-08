@@ -1,3 +1,7 @@
+import type { SocialAlias, SocialAnalytics, XResult } from "./social";
+import type { CaseUpdate, IncidentTimelineItem, ManualCase, MatchResult, PaymentException, Proposal, ProposalInput, ReconciliationSummary } from "./reconciliation";
+export type { IncidentTimelineItem } from "./reconciliation";
+
 /**
  * Conflux HQ — Full Real-Time FastAPI Backend Client
  */
@@ -24,7 +28,7 @@ export interface BackendUser {
   id: string;
   email: string;
   full_name: string;
-  role: string;
+  role: "bank_admin" | "agent" | "it" | "manager";
   status: string;
   bank: BackendBank;
 }
@@ -163,44 +167,42 @@ export interface BackendAuditEntry {
   created_at: string;
 }
 
+export class ApiError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+  }
+}
+
 class ConfluxApiClient {
-  /**
-   * Check if a valid token is stored in localStorage / memory
-   */
   hasStoredToken(): boolean {
-    const now = Date.now();
-    if (cachedToken && tokenExpiresAt > now + 10000) return true;
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("conflux_demo_token");
-      const storedExp = localStorage.getItem("conflux_demo_token_exp");
-      if (stored && storedExp && Number(storedExp) > now + 10000) {
-        cachedToken = stored;
-        tokenExpiresAt = Number(storedExp);
-        return true;
-      }
-    }
-    return false;
+    if (typeof window === "undefined") return false;
+    cachedToken = localStorage.getItem("conflux_demo_token");
+    tokenExpiresAt = Number(localStorage.getItem("conflux_demo_token_exp"));
+    return Boolean(cachedToken && tokenExpiresAt > Date.now());
   }
 
-  /**
-   * Explicit login with username/email and password
-   */
-  async login(identifier: string, password: string): Promise<BackendLoginResponse> {
-    const trimmed = identifier.trim();
-    // Try demo login payload first (username + password), then standard email + password if needed
-    let res = await fetch(`${API_BASE}/api/v1/auth/login`, {
+  private storeToken(data: BackendLoginResponse): void {
+    cachedToken = data.access_token;
+    tokenExpiresAt = Date.now() + data.expires_in * 1000;
+    localStorage.setItem("conflux_demo_token", cachedToken);
+    localStorage.setItem("conflux_demo_token_exp", String(tokenExpiresAt));
+    localStorage.removeItem("conflux_user");
+  }
+
+  async login(email: string, password: string): Promise<void> {
+    await this.signIn({ email, password });
+  }
+
+  async enterDemo(): Promise<void> {
+    await this.signIn({ username: "Zymic Bank", password: "123" });
+  }
+
+  private async signIn(payload: { email?: string; username?: string; password: string }): Promise<void> {
+    const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: trimmed, password }),
+      body: JSON.stringify(payload),
     });
-
-    if (res.status === 422 && trimmed.includes("@")) {
-      res = await fetch(`${API_BASE}/api/v1/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimmed, password }),
-      });
-    }
 
     if (!res.ok) {
       let detail = `Authentication failed (${res.status})`;
@@ -213,25 +215,9 @@ class ConfluxApiClient {
       throw new Error(detail);
     }
 
-    const data: BackendLoginResponse = await res.json();
-    const now = Date.now();
-    cachedToken = data.access_token;
-    tokenExpiresAt = now + (data.expires_in || 7200) * 1000;
-
-    if (typeof window !== "undefined") {
-      localStorage.setItem("conflux_demo_token", cachedToken);
-      localStorage.setItem("conflux_demo_token_exp", String(tokenExpiresAt));
-      if (data.user) {
-        localStorage.setItem("conflux_user", JSON.stringify(data.user));
-      }
-    }
-
-    return data;
+    this.storeToken(await res.json());
   }
 
-  /**
-   * Register a new bank tenant (or provision in demo mode)
-   */
   async registerBank(payload: {
     bank_name: string;
     cac_number?: string;
@@ -239,7 +225,7 @@ class ConfluxApiClient {
     admin_full_name: string;
     email: string;
     password: string;
-  }): Promise<BackendLoginResponse> {
+  }): Promise<{ email_confirmation_required: boolean }> {
     const res = await fetch(`${API_BASE}/api/v1/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -254,23 +240,7 @@ class ConfluxApiClient {
     });
 
     if (res.status === 404) {
-      // Demo mode active: authenticate against demo bank tenant and customize local session profile
-      const demoRes = await this.login("Zymic Bank", "123");
-      if (demoRes.user && typeof window !== "undefined") {
-        const customUser: BackendUser = {
-          ...demoRes.user,
-          full_name: payload.admin_full_name,
-          email: payload.email,
-          bank: {
-            ...demoRes.user.bank,
-            name: payload.bank_name,
-            cac_number: payload.cac_number || null,
-          },
-        };
-        localStorage.setItem("conflux_user", JSON.stringify(customUser));
-        demoRes.user = customUser;
-      }
-      return demoRes;
+      throw new Error("Bank registration is unavailable on this server. Demo access uses the fixed Zymic Bank tenant.");
     }
 
     if (!res.ok) {
@@ -284,27 +254,12 @@ class ConfluxApiClient {
       throw new Error(detail);
     }
 
-    const regData = await res.json();
-    if (regData.session?.access_token) {
-      const now = Date.now();
-      cachedToken = regData.session.access_token;
-      tokenExpiresAt = now + (regData.session.expires_in || 7200) * 1000;
-      if (typeof window !== "undefined") {
-        localStorage.setItem("conflux_demo_token", cachedToken!);
-        localStorage.setItem("conflux_demo_token_exp", String(tokenExpiresAt));
-        if (regData.user) {
-          localStorage.setItem("conflux_user", JSON.stringify(regData.user));
-        }
-      }
-      return {
-        access_token: regData.session.access_token,
-        token_type: "bearer",
-        expires_in: regData.session.expires_in || 7200,
-        user: regData.user,
-      };
+    const data: { session: BackendLoginResponse | null; email_confirmation_required: boolean } = await res.json();
+    if (data.session) this.storeToken(data.session);
+    if (!data.session && !data.email_confirmation_required) {
+      throw new Error("Registration did not return a session. Sign in to continue.");
     }
-
-    return this.login(payload.email, payload.password);
+    return { email_confirmation_required: data.email_confirmation_required };
   }
 
   /**
@@ -317,37 +272,16 @@ class ConfluxApiClient {
       localStorage.removeItem("conflux_demo_token");
       localStorage.removeItem("conflux_demo_token_exp");
       localStorage.removeItem("conflux_user");
+      window.dispatchEvent(new Event("conflux:logout"));
     }
   }
 
-  /**
-   * Retrieves or renews bearer token from FastAPI
-   */
-  async getAuthToken(): Promise<string> {
-    const now = Date.now();
-    if (cachedToken && tokenExpiresAt > now + 60000) {
-      return cachedToken;
-    }
-
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("conflux_demo_token");
-      const storedExp = localStorage.getItem("conflux_demo_token_exp");
-      if (stored && storedExp && Number(storedExp) > now + 60000) {
-        cachedToken = stored;
-        tokenExpiresAt = Number(storedExp);
-        return stored;
-      }
-    }
-
-    const data = await this.login("Zymic Bank", "123");
-    return data.access_token;
-  }
-
-  /**
-   * Authorized fetch wrapper
-   */
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const token = await this.getAuthToken();
+    if (!this.hasStoredToken()) {
+      this.logout();
+      throw new Error("Your session has expired. Please sign in.");
+    }
+    const token = cachedToken;
     const headers: Record<string, string> = {
       Accept: "application/json",
       "Content-Type": "application/json",
@@ -355,25 +289,19 @@ class ConfluxApiClient {
       ...(options.headers as Record<string, string>),
     };
 
-    let res = await fetch(`${API_BASE}${endpoint}`, {
+    const res = await fetch(`${API_BASE}${endpoint}`, {
+      signal: !options.method || options.method === "GET" ? AbortSignal.timeout(15000) : undefined,
       ...options,
       headers,
     });
 
-    // If token expired or server restarted, re-login once
-    if (res.status === 401) {
+    if (res.status === 401 && typeof window !== "undefined" && localStorage.getItem("conflux_demo_token") === token) {
       this.logout();
-      const freshToken = await this.getAuthToken();
-      headers.Authorization = `Bearer ${freshToken}`;
-      res = await fetch(`${API_BASE}${endpoint}`, {
-        ...options,
-        headers,
-      });
     }
 
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
-      throw new Error(`API error ${res.status} on ${endpoint}: ${errText}`);
+      throw new ApiError(res.status, `API error ${res.status}: ${errText}`);
     }
 
     return res.json();
@@ -381,21 +309,53 @@ class ConfluxApiClient {
 
   // Current authenticated user profile
   async getMe(): Promise<BackendUser> {
-    const me = await this.request<BackendUser>("/api/v1/auth/me");
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("conflux_user");
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved) as BackendUser;
-          // Preserve custom registered bank/name if set in demo session
-          if (parsed.email && parsed.email !== "demo@zymic.example") {
-            return parsed;
-          }
-        } catch {}
-      }
-      localStorage.setItem("conflux_user", JSON.stringify(me));
-    }
-    return me;
+    return this.request<BackendUser>("/api/v1/auth/me");
+  }
+
+  private reconciliation<T>(path: string, method = "GET", payload?: unknown): Promise<T> {
+    return this.request<T>(`/api/v1/reconciliation${path}`, { method, body: JSON.stringify(payload) });
+  }
+
+  getReconciliationSummary() {
+    return this.reconciliation<ReconciliationSummary>("/summary");
+  }
+
+  getExceptions(status: string, offset: number) {
+    const query = new URLSearchParams({ limit: "50", offset: String(offset) });
+    if (status) query.set("status", status);
+    return this.reconciliation<PaymentException[]>(`/exceptions?${query}`);
+  }
+
+  createException(payload: ManualCase) {
+    return this.reconciliation<PaymentException>("/exceptions", "POST", payload);
+  }
+
+  matchComplaint(id: string) {
+    return this.reconciliation<MatchResult>(`/complaints/${encodeURIComponent(id)}/match`, "POST");
+  }
+
+  createComplaintException(id: string) {
+    return this.reconciliation<PaymentException>(`/complaints/${encodeURIComponent(id)}/create`, "POST");
+  }
+
+  updateException(id: string, payload: CaseUpdate) {
+    return this.reconciliation<PaymentException>(`/exceptions/${id}`, "PATCH", payload);
+  }
+
+  getProposals(id: string) {
+    return this.reconciliation<Proposal[]>(`/exceptions/${id}/proposals`);
+  }
+
+  createProposal(id: string, payload: ProposalInput) {
+    return this.reconciliation<Proposal>(`/exceptions/${id}/proposals`, "POST", payload);
+  }
+
+  decideProposal(id: string, decision: "approved" | "rejected") {
+    return this.reconciliation<Proposal>(`/proposals/${id}/decision`, "POST", { decision });
+  }
+
+  getIncidentTimeline(id: string) {
+    return this.request<{ timeline: IncidentTimelineItem[] }>(`/api/v1/incidents/${id}/reconciliation`);
   }
 
   // Analytics & Summary
@@ -502,12 +462,22 @@ class ConfluxApiClient {
     return this.request<BackendAuditEntry[]>(`/api/v1/ai/audit?limit=${limit}`);
   }
 
+  async getComplaint(id: string): Promise<BackendComplaint> {
+    return this.request(`/api/v1/complaints/${encodeURIComponent(id)}`);
+  }
+
+  classifyComplaint(id: string) {
+    return this.request<BackendComplaint>(`/api/v1/complaints/${encodeURIComponent(id)}/classify`, { method: "POST" });
+  }
+
   // Complaints
   async getComplaints(params?: {
     channel?: string;
     issue_type?: string;
     region?: string;
     is_fraud?: boolean;
+    since?: string;
+    until?: string;
     limit?: number;
     offset?: number;
   }): Promise<BackendComplaint[]> {
@@ -516,6 +486,8 @@ class ConfluxApiClient {
     if (params?.issue_type && params.issue_type !== "all") query.set("issue_type", params.issue_type);
     if (params?.region && params.region !== "all") query.set("region", params.region);
     if (params?.is_fraud !== undefined) query.set("is_fraud", String(params.is_fraud));
+    if (params?.since) query.set("since", params.since);
+    if (params?.until) query.set("until", params.until);
     query.set("limit", String(params?.limit || 300));
     if (params?.offset) query.set("offset", String(params.offset));
 
@@ -557,19 +529,38 @@ class ConfluxApiClient {
   }
 
   // Social X Adapter
-  async pullXPosts(maxResults = 15): Promise<{
-    fetched: number;
-    ingested: number;
-    duplicates: number;
-    unmatched: number;
-    source: string;
-  }> {
+  getSocialAnalytics() {
+    return this.request<SocialAnalytics>("/api/v1/analytics/social?hours=24");
+  }
+
+  getXStatus() {
+    return this.request<{ credentials_configured: boolean; reads_today: number; daily_post_limit: number }>("/api/v1/social/x/status");
+  }
+
+  getAliases() {
+    return this.request<{ items: SocialAlias[] }>("/api/v1/social/aliases");
+  }
+
+  replaceAliases(aliases: SocialAlias[]) {
+    return this.request<{ items: SocialAlias[] }>("/api/v1/social/aliases", {
+      method: "PUT", body: JSON.stringify({ aliases }),
+    });
+  }
+
+  async replayXPosts(): Promise<XResult> {
+    const result = await this.request<XResult>("/api/v1/social/x/replay", {
+      method: "POST", body: JSON.stringify({ limit: 15 }),
+    });
+    return { ...result, source: "recorded_replay" };
+  }
+
+  async pullXPosts(maxResults = 15, fallbackToReplay = false): Promise<XResult> {
     return this.request("/api/v1/social/x/pull", {
       method: "POST",
       body: JSON.stringify({
         mode: "recent_search",
         max_results: maxResults,
-        fallback_to_replay: true,
+        fallback_to_replay: fallbackToReplay,
         auto_drain: true,
       }),
     });

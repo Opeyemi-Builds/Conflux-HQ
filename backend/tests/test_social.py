@@ -69,7 +69,7 @@ def test_alias_configuration_and_tenant_safe_intake(monkeypatch):
         assert first.status_code == 202
         body = first.json()
         assert body["issue_type"] == "double_debit" and body["channel"] == "x"
-        assert body["analysis_method"] == "demo_rules_v1" and body["synthetic"] is False
+        assert body["analysis_method"] == "demo_rules_v2" and body["synthetic"] is False
         duplicate = client.post("/api/v1/social/events", json=event("p-1", "@zymicbank another different text"))
         assert duplicate.json()["duplicate"] is True
         unmatched = client.post("/api/v1/social/events", json=event("p-no", "I need access to my account"))

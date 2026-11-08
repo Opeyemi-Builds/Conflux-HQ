@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Lock, ShieldAlert, Radio } from "lucide-react";
 import { useDash } from "@/components/dashboard/Provider";
 import { Card, PageHeader, SeverityBadge, Stat, Tag, Td, TableWrap, Th } from "@/components/dashboard/ui";
@@ -7,7 +7,6 @@ import { SpikeChart } from "@/components/dashboard/Charts";
 
 export default function Security() {
   const { complaints, summary, isBackendLive } = useDash();
-  const [done, setDone] = useState(false);
 
   const rows = useMemo(
     () => complaints.filter((c) => c.isFraud || c.issue === "fraud_scam"),
@@ -38,8 +37,9 @@ export default function Security() {
   const fraudSeries = useMemo(() => {
     const buckets = new Map<string, number>();
     rows.forEach((r) => {
-      if (r.time && r.time !== "—") {
-        buckets.set(r.time, (buckets.get(r.time) || 0) + 1);
+      if (r.occurredAt) {
+        const bucket = new Date(r.occurredAt).toISOString().slice(0, 13).replace("T", " ") + ":00 UTC";
+        buckets.set(bucket, (buckets.get(bucket) || 0) + 1);
       }
     });
     const keys = Array.from(buckets.keys()).sort();
@@ -53,12 +53,12 @@ export default function Security() {
     <>
       <PageHeader
         title="Security queue"
-        sub="Fraud, phishing and impersonation scam complaints are segregated from the standard queue in real time."
+        sub="Fraud flags and scam classifications from the latest 500 complaints. Dashboard data updates by polling."
         right={
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
               <Radio className="w-3.5 h-3.5 animate-pulse text-emerald-600" />
-              {isBackendLive ? "Real-Time Security Feed" : "Connecting…"}
+              {isBackendLive ? "Polling security data" : "Connecting…"}
             </span>
             <Tag tone="red">
               <Lock className="w-3 h-3 inline -mt-0.5 mr-1" />
@@ -104,11 +104,10 @@ export default function Security() {
               </div>
             </div>
             <button
-              onClick={() => setDone(true)}
-              disabled={done}
+              disabled
               className="px-5 py-2.5 rounded-full bg-navy text-white font-semibold hover:bg-navy-600 disabled:opacity-50 transition-colors"
             >
-              {done ? "Escalated to fraud ops & freeze team" : "Escalate to security ops"}
+              Security escalation unavailable
             </button>
           </div>
           {fraudSeries.labels.length > 0 && (

@@ -15,9 +15,10 @@ export default function Overview() {
     hourlySeries,
     channelSplit,
     isBackendLive,
+    isLoading,
   } = useDash();
 
-  const live = incidents.slice().sort((a, b) => b.priority - a.priority);
+  const live = incidents.filter((incident) => incident.status !== "resolved" && incident.rawStatus !== "dismissed").sort((a, b) => b.priority - a.priority);
   const topIncident = live[0] || null;
 
   const complaintsCount =
@@ -93,9 +94,9 @@ export default function Overview() {
             className="rounded-3xl bg-white border border-navy/[0.06] p-6 mb-6 flex items-center gap-4"
           >
             <span className="w-3 h-3 rounded-full bg-emerald-500" />
-            <p className="font-semibold text-navy">All systems normal.</p>
+            <p className="font-semibold text-navy">{isLoading ? "Loading incident data…" : isBackendLive ? "No active incidents reported." : "Incident data is unavailable."}</p>
             <p className="text-navy/55">
-              No active spikes detected across monitored banking channels.
+              {isBackendLive ? "Based on the latest dashboard poll." : "The dashboard will retry on the next poll."}
             </p>
           </motion.div>
         )}
@@ -103,11 +104,11 @@ export default function Overview() {
 
       <PageHeader
         title="Live overview"
-        sub="Complaints from every channel, classified and watched for systemic spikes in real time."
+        sub="Complaints from every channel, classified and watched for systemic spikes with four-second polling."
         right={
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
             <Radio className="w-3.5 h-3.5 animate-pulse text-emerald-600" />
-            {isBackendLive ? "Live API Stream" : "Connecting API…"}
+            {isBackendLive ? "Polling API" : "API unavailable"}
           </div>
         }
       />
