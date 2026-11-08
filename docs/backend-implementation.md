@@ -85,10 +85,51 @@ Core entities include:
 - Bank aliases.
 - Social receipts.
 - Worker jobs.
+- Payment exceptions and reconciliation cases.
+- Human-reviewed payment proposals.
 
 Bank-scoped queries use `bank_id`. The backend also enables PostgreSQL row-level security on protected tables through migrations. Application-level tenant checks ensure that users cannot read another bank's complaints, incidents or drafts.
 
-## Privacy protection
+The reconciliation API is mounted under `/api/v1/reconciliation`.
+
+```text
+GET  /api/v1/reconciliation/summary
+GET  /api/v1/reconciliation/exceptions
+POST /api/v1/reconciliation/exceptions
+POST /api/v1/reconciliation/complaints/{complaint_id}/match
+POST /api/v1/reconciliation/complaints/{complaint_id}/create
+PATCH /api/v1/reconciliation/exceptions/{exception_id}
+```
+
+Payment exceptions represent bank-scoped operational cases such as debited-but-not-credited transfers, failed transfers, delayed settlement, reversed-but-not-refunded payments, duplicate debits, processor timeouts, switch outages and fraud disputes. Each case records the complaint and transaction references, settlement status, matching confidence, explainable evidence, priority, owner, approval requirement and resolution timestamp.
+
+Transaction matching is read-only and searches only the same bank's transactions in a bounded time window. Confidence is composed from amount, time, channel and status evidence. Matching returns ranked candidates with reasons. Ambiguous equal-confidence candidates are deliberately left unresolved for human review. Creating a case never moves money.
+
+### Worker reconciliation integration
+
+When the worker classifies a failed-transfer, double-debit or fraud/scam complaint, it creates an idempotent payment exception if one does not already exist. Existing cases are not duplicated. This allows social and complaint ingestion to flow into the reconciliation queue without blocking the intake request.
+
+### Incident reconciliation evidence
+
+Incident evidence includes reconciliation case counts and statuses in addition to complaints, transactions and system events. The read-only incident view is:
+
+```text
+GET /api/v1/incidents/{incident_id}/reconciliation
+```
+
+It returns reconciliation aggregates and a chronological timeline of complaints, candidate transactions, reconciliation cases, resolutions and nearby system events. Transaction and system-event associations are explicitly labelled as investigative or time-correlated evidence, not proof of causation or confirmed loss.
+
+### Human-reviewed refund and reversal proposals
+
+Financial actions are represented as non-executing proposals rather than direct money movement:
+
+```text
+POST /api/v1/reconciliation/exceptions/{exception_id}/proposals
+GET  /api/v1/reconciliation/exceptions/{exception_id}/proposals
+POST /api/v1/reconciliation/proposals/{proposal_id}/decision
+```
+
+Only refund or reversal proposals are accepted. The amount cannot exceed the documented case amount, only one active proposal is allowed per case, and a proposer cannot approve their own proposal. Bank administrators make the approval decision. Approval is recorded for audit purposes only; the prototype has no execution adapter, does not enqueue a financial job and never resolves a case automatically.
 
 Complaint and social content is masked before persistence. The privacy layer detects and replaces common patterns for:
 
@@ -409,7 +450,12 @@ Audit records are bank-scoped where the event belongs to a specific tenant.
 
 ## Database migrations
 
-The migration chain includes the initial schema, row-level security, AI complaint fields, social intake, worker jobs and social intelligence fields.
+The migration chain includes the initial schema, row-level security, AI complaint fields, social intake, worker jobs, social intelligence fields, privacy-safe author hashes, payment exceptions and non-executing payment proposals.
+
+The current reconciliation migrations are:
+
+- `0007_payment_exceptions`: creates bank-scoped payment exception records and indexes, with PostgreSQL RLS enabled.
+- `0008_payment_proposals`: creates human-reviewable refund/reversal proposal records and indexes, with PostgreSQL RLS enabled.
 
 Before using a hosted database, run:
 
@@ -445,6 +491,12 @@ The test suite covers:
 - Investigation safety.
 - Worker queue behavior.
 - Draft approval restrictions.
+- Payment exception creation and duplicate prevention.
+- Explainable transaction matching and ambiguous-match handling.
+- Reconciliation status and settlement lifecycle updates.
+- Reconciliation tenant isolation.
+- Incident reconciliation summaries and evidence timelines.
+- Non-executing refund/reversal proposal limits and approval restrictions.
 
 Run the backend tests from `backend/`:
 
