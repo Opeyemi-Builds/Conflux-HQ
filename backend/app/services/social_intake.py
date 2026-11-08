@@ -37,6 +37,7 @@ class SocialEvent(BaseModel):
     author_ref: str | None = Field(default=None, max_length=160)
     region: str | None = Field(default=None, max_length=64)
     matching_rule_tags: list[str] = Field(default_factory=list, max_length=25)
+    public_metrics: dict[str, int] = Field(default_factory=dict, max_length=20)
 
     @field_validator("source_url")
     @classmethod
