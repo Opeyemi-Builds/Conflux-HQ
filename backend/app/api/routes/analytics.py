@@ -239,7 +239,7 @@ def social_analytics(user: AuthUser, db: DbSession, hours: Hours = 24, at: Ancho
             flags[flag] = flags.get(flag, 0) + 1
         bucket = row.received_at.astimezone(timezone.utc).replace(minute=0, second=0, microsecond=0)
         buckets[bucket] = buckets.get(bucket, 0) + 1
-                if row.author_ref_hash:
+        if row.author_ref_hash:
             authors.add(row.author_ref_hash)
         else:
             authors.add(f"{row.bank_id}:{row.post_id}")
