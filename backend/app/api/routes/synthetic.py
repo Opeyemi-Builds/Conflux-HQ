@@ -12,7 +12,7 @@ from app.api.deps import DbSession, Operator
 from app.core.config import get_settings
 from app.core.privacy import mask_pii, pseudonymise
 from app.db.base import utcnow
-from app.models import Bank, Complaint, SystemEvent, Transaction
+from app.models import Bank, Complaint, Draft, Incident, SystemEvent, Transaction
 from app.models.enums import (
     Channel,
     EventType,
@@ -93,7 +93,9 @@ def seed_data(payload: SeedRequest, user: Operator, db: DbSession):
     require_demo(user)
     db.execute(select(Bank).where(Bank.id == user.bank_id).with_for_update()).scalar_one()
     if payload.reset:
-        for model in (Complaint, Transaction, SystemEvent):
+        inc_ids = select(Incident.id).where(Incident.bank_id == user.bank_id)
+        db.query(Draft).filter(Draft.incident_id.in_(inc_ids)).delete(synchronize_session=False)
+        for model in (Complaint, Transaction, SystemEvent, Incident):
             db.query(model).filter(model.bank_id == user.bank_id).delete(synchronize_session=False)
         db.flush()
     else:

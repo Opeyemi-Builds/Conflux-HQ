@@ -31,12 +31,20 @@ export default function Navbar() {
             </Link>
           ))}
         </div>
-        <Link
-          href="/dashboard"
-          className="bg-navy text-white text-base font-medium px-7 py-2.5 rounded-full hover:bg-navy-600 transition-colors duration-200 shadow-sm"
-        >
-          Open Dashboard
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/login"
+            className="text-navy hover:text-flux text-base font-medium px-4 py-2 rounded-full transition-colors duration-200"
+          >
+            Sign in
+          </Link>
+          <Link
+            href="/dashboard"
+            className="bg-navy text-white text-base font-medium px-7 py-2.5 rounded-full hover:bg-navy-600 transition-colors duration-200 shadow-sm"
+          >
+            Open Dashboard
+          </Link>
+        </div>
       </div>
     </nav>
   );
