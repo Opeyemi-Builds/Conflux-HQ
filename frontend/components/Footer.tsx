@@ -40,7 +40,8 @@ const navColumns = [
     title: "Dashboard",
     links: [
       { label: "Live Overview", href: "/dashboard" },
-      { label: "Active Incidents (INC-0421)", href: "/dashboard/incidents/INC-0421" },
+      { label: "Geospatial Threat Map", href: "/dashboard/risk-map" },
+      { label: "Active Incidents", href: "/dashboard/incidents/latest" },
       { label: "All Complaints Feed", href: "/dashboard/complaints" },
       { label: "Fraud & Security Queue", href: "/dashboard/security" },
       { label: "Analytics & Trends", href: "/dashboard/analytics" },
@@ -131,7 +132,7 @@ export default function Footer() {
             <div className="pt-2">
               <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-800 border border-emerald-500/20">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                Live synthetic simulation stream active
+                Live backend telemetry stream active
               </span>
             </div>
           </div>
@@ -180,7 +181,7 @@ export default function Footer() {
           </p>
           <div className="flex items-center gap-4">
             <span className="text-navy/45">
-              All complaints, logs and transactions shown are synthetic.
+              NDPR Compliant · Human-in-the-Loop Financial Governance
             </span>
             <button
               onClick={scrollToTop}

@@ -1,29 +1,36 @@
-# Conflux HQ frontend
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-Next.js application with React, Tailwind, and Recharts. All frontend source, assets, package manifests, and configuration live in this directory.
+## Getting Started
 
-## Run locally
+First, run the development server:
 
-From the repository root:
-
-```sh
-cd frontend
-npm ci
+```bash
 npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
-Open http://localhost:3000.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-```sh
-npm run build
-npm start
-npm run lint
-```
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-Run these commands inside `frontend/`, not the repository root. For hosting, configure the application's root directory as `frontend`.
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Backend
+## Learn More
 
-The separate FastAPI application is in `../backend/`. Its API defaults to http://localhost:8000/api/v1, with interactive docs at http://localhost:8000/docs. See [backend setup](../backend/README.md).
+To learn more about Next.js, take a look at the following resources:
 
-The dashboard currently uses mock data; moving the application does not connect it to the backend. Never expose backend database credentials, Supabase service-role keys, or social adapter tokens to browser code.
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

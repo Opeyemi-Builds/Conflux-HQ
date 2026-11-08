@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
-import type { IssueType, Severity } from "@/lib/types";
-import { ISSUE_LABEL } from "@/lib/mock";
+import { ISSUE_LABEL, type IssueType, type Severity } from "@/lib/types";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <div className={`rounded-2xl bg-white border border-navy/[0.06] shadow-[0_1px_2px_rgba(20,35,63,.04)] ${className}`}>{children}</div>;
