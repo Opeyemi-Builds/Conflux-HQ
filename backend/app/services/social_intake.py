@@ -37,6 +37,7 @@ class SocialEvent(BaseModel):
     author_ref: str | None = Field(default=None, max_length=160)
     region: str | None = Field(default=None, max_length=64)
     matching_rule_tags: list[str] = Field(default_factory=list, max_length=25)
+    public_metrics: dict[str, int] = Field(default_factory=dict, max_length=20)
 
     @field_validator("source_url")
     @classmethod
@@ -87,3 +88,25 @@ def analyze(text: str) -> dict:
     return {"issue_type": issue, "is_fraud": issue == "fraud_scam",
             "severity": "high" if issue in {"fraud_scam", "double_debit", "failed_transfer"} else "medium",
             "sentiment": None}
+
+
+def reputation_signals(text: str, metrics: dict[str, int] | None = None) -> dict:
+    """Return transparent, non-defamatory reputation-risk signals for triage."""
+    value = text.casefold()
+    flags: list[str] = []
+    patterns = {
+        "public_escalation": r"(tag|mention|thread|viral|trend|retweet|share)",
+        "scam_allegation": r"(scam|fraud|stole|stolen|thief|criminal|hack)",
+        "service_failure": r"(failed|unable|down|not working|no credit|debited|charged twice)",
+        "regulatory_escalation": r"(cbn|ombudsman|lawyer|court|report you|sue)",
+        "abusive_language": r"(idiot|useless|terrible|worst|thieves|criminals)",
+    }
+    for flag, pattern in patterns.items():
+        if re.search(pattern, value):
+            flags.append(flag)
+    metrics = metrics or {}
+    engagement = sum(max(0, int(metrics.get(key, 0) or 0)) for key in ("like_count", "retweet_count", "reply_count", "quote_count"))
+    if engagement >= 100:
+        flags.append("high_reach")
+    score = min(1.0, round(0.15 * len(flags) + (0.25 if engagement >= 100 else 0), 2))
+    return {"flags": sorted(set(flags)), "score": score, "engagement": engagement}

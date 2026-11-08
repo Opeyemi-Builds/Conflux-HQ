@@ -19,7 +19,7 @@ from app.services.social_intake import SocialEvent
 
 COST_PER_POST_READ_USD = 0.005
 RECORDED_MENTIONS_PATH = Path(__file__).resolve().parents[3] / "data" / "social" / "x_recorded_mentions.json"
-X_TWEET_FIELDS = "created_at,author_id,lang"
+X_TWEET_FIELDS = "created_at,author_id,lang,public_metrics,conversation_id"
 X_EXPANSIONS = "author_id"
 X_USER_FIELDS = "username,name"
 
@@ -37,31 +37,39 @@ def compile_desired_rules(db: Session) -> list[dict]:
         return []
 
     aliases = db.scalars(
-        select(BankAlias).where(BankAlias.kind == "handle")
+        select(BankAlias).where(BankAlias.kind.in_(["handle", "hashtag", "name"]))
     ).all()
-    handles_by_bank: dict[uuid.UUID, list[str]] = {}
+    identities_by_bank: dict[uuid.UUID, list[str]] = {}
     for alias in aliases:
         if alias.platform in (None, "x"):
-            handles_by_bank.setdefault(alias.bank_id, []).append(_clean_handle(alias.value))
+            value = alias.value.casefold().strip()
+            if alias.kind == "handle":
+                value = _clean_handle(value)
+            elif alias.kind == "hashtag":
+                value = "#" + value.lstrip("#")
+            identities_by_bank.setdefault(alias.bank_id, []).append(value)
 
     rules = []
     for bank in banks:
-        handles = sorted(set(handles_by_bank.get(bank.id, [])))
-        if not handles:
+        identities = sorted(set(identities_by_bank.get(bank.id, [])))
+        if not identities:
             slug_clean = "".join(c for c in (bank.slug or bank.name).casefold() if c.isalnum())
-            handles = [f"@{slug_clean}"]
+            identities = [f"@{slug_clean}"]
         clauses = []
-        for h in handles:
-            bare = h.lstrip("@")
-            clauses.append(h)
-            clauses.append(f"to:{bare}")
+        for identity in identities:
+            if identity.startswith("@"):
+                bare = identity.lstrip("@")
+                clauses.extend([identity, f"to:{bare}"])
+            else:
+                clauses.append(identity)
         query = f"({' OR '.join(clauses)}) -is:retweet"
         rules.append({
             "value": query,
             "tag": f"tenant:{bank.id}",
             "bank_id": str(bank.id),
             "bank_name": bank.name,
-            "handles": handles,
+            "handles": [i for i in identities if i.startswith("@")] ,
+            "identities": identities,
         })
     return rules
 
@@ -84,18 +92,20 @@ def compile_combined_search_query(db: Session, *, handles: list[str] | None = No
             return f"({' OR '.join(clauses)}) -is:retweet"
 
     rules = compile_desired_rules(db)
-    all_handles: list[str] = []
+    all_identities: list[str] = []
     for r in rules:
-        for h in r.get("handles", []):
-            if h not in all_handles:
-                all_handles.append(h)
-    if not all_handles:
+        for identity in r.get("identities", r.get("handles", [])):
+            if identity not in all_identities:
+                all_identities.append(identity)
+    if not all_identities:
         return "(@myaccessbank OR to:myaccessbank OR @accessbank_help OR to:accessbank_help) -is:retweet"
     clauses = []
-    for h in all_handles:
-        bare = h.lstrip("@")
-        clauses.append(h)
-        clauses.append(f"to:{bare}")
+    for identity in all_identities:
+        if identity.startswith("@"):
+            bare = identity.lstrip("@")
+            clauses.extend([identity, f"to:{bare}"])
+        else:
+            clauses.append(identity)
     return f"({' OR '.join(clauses)}) -is:retweet"
 
 
@@ -304,6 +314,7 @@ def parse_x_v2_payload(raw_payload: dict, *, synthetic: bool = False) -> SocialE
         username = users[0].get("username")
 
     author_ref = f"x_user:{username or author_id}" if (username or author_id) else None
+    public_metrics = data.get("public_metrics") or {}
     matching_rules = raw_payload.get("matching_rules") or []
     rule_tags = [str(r["tag"]) for r in matching_rules if isinstance(r, dict) and r.get("tag")]
 
@@ -318,6 +329,7 @@ def parse_x_v2_payload(raw_payload: dict, *, synthetic: bool = False) -> SocialE
         author_ref=author_ref,
         region=data.get("region") or raw_payload.get("region"),
         matching_rule_tags=rule_tags,
+        public_metrics=public_metrics,
     )
 
 
