@@ -2,6 +2,8 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import ExceptionType, ReconciliationStatus, SettlementStatus
@@ -57,6 +59,33 @@ class PaymentExceptionRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     resolved_at: datetime | None
+
+
+class ProposalCreate(BaseModel):
+    kind: Literal["refund", "reversal"]
+    amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
+    reason: str = Field(min_length=10, max_length=2000)
+
+
+class ProposalDecision(BaseModel):
+    decision: Literal["approved", "rejected"]
+
+
+class ProposalRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    exception_id: uuid.UUID
+    kind: str
+    amount: Decimal
+    currency: str
+    reason: str
+    status: str
+    proposed_by: str
+    decided_by: str | None
+    created_at: datetime
+    decided_at: datetime | None
+    execution_enabled: bool = False
 
 
 class MatchCandidate(BaseModel):
