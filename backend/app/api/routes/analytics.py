@@ -230,8 +230,6 @@ def social_analytics(user: AuthUser, db: DbSession, hours: Hours = 24, at: Ancho
     for row in rows:
         metrics = row.public_metrics or {}
         total_engagement += sum(max(0, int(metrics.get(key, 0) or 0)) for key in ("like_count", "retweet_count", "reply_count", "quote_count"))
-        if total_engagement:
-            pass
         if "high_reach" in (row.reputation_flags or []):
             high_reach += 1
         if row.reputation_score >= 0.35:
@@ -241,7 +239,10 @@ def social_analytics(user: AuthUser, db: DbSession, hours: Hours = 24, at: Ancho
             flags[flag] = flags.get(flag, 0) + 1
         bucket = row.received_at.astimezone(timezone.utc).replace(minute=0, second=0, microsecond=0)
         buckets[bucket] = buckets.get(bucket, 0) + 1
-        authors.add(row.post_id if not row.matched_aliases else f"{row.bank_id}:{row.post_id}")
+                if row.author_ref_hash:
+            authors.add(row.author_ref_hash)
+        else:
+            authors.add(f"{row.bank_id}:{row.post_id}")
     cursor = window["window_start"].replace(minute=0, second=0, microsecond=0)
     velocity = []
     while cursor < window["window_end"]:

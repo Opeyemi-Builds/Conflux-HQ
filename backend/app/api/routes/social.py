@@ -271,6 +271,7 @@ def ingest_social_event(db: Session, event: SocialEvent) -> dict:
             complaint_id=complaint.id,
             source_url=event.source_url,
             matched_aliases=clean_aliases,
+            author_ref_hash=hashlib.sha256((event.author_ref or "anonymous").encode()).hexdigest(),
             public_metrics=event.public_metrics,
             reputation_flags=reputation["flags"],
             reputation_score=reputation["score"],
