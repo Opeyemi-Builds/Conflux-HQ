@@ -36,21 +36,25 @@ export default function Analytics() {
     isBackendLive,
   } = useDash();
 
-  const ttd = summary?.avg_time_to_detect_seconds
-    ? `${Math.max(1, Math.round(summary.avg_time_to_detect_seconds / 60))} min`
-    : "3 min";
+  const ttd =
+    summary?.avg_time_to_detect_seconds != null
+      ? `${Math.max(1, Math.round(summary.avg_time_to_detect_seconds / 60))} min`
+      : "—";
 
-  const repeatRate = summary?.repeat_complaint_rate
-    ? `${(summary.repeat_complaint_rate * 100).toFixed(1)}%`
-    : "0%";
+  const repeatRate =
+    summary?.repeat_complaint_rate != null
+      ? `${(summary.repeat_complaint_rate * 100).toFixed(1)}%`
+      : "—";
 
-  const failedRate = transactionsAnalytics?.failed_rate
-    ? `${(transactionsAnalytics.failed_rate * 100).toFixed(1)}%`
-    : "0%";
+  const failedRate =
+    transactionsAnalytics?.failed_rate != null
+      ? `${(transactionsAnalytics.failed_rate * 100).toFixed(1)}%`
+      : "—";
 
-  const totalTxns = transactionsAnalytics?.total_transactions
-    ? transactionsAnalytics.total_transactions.toLocaleString()
-    : "0";
+  const totalTxns =
+    transactionsAnalytics?.total_transactions != null
+      ? transactionsAnalytics.total_transactions.toLocaleString()
+      : "—";
 
   return (
     <>
@@ -61,7 +65,7 @@ export default function Analytics() {
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
               <Radio className="w-3.5 h-3.5 animate-pulse text-emerald-600" />
-              {isBackendLive ? "FastAPI Live Feed" : "Connecting…"}
+              {isBackendLive ? "Live API Stream" : "Connecting…"}
             </span>
             <Link
               href="/dashboard/risk-map"
@@ -77,7 +81,7 @@ export default function Analytics() {
         <Stat label="Time to detect" value={ttd} hint="from first spike signal" accent />
         <Stat
           label="Total complaints (72h)"
-          value={summary?.total_complaints ? summary.total_complaints.toLocaleString() : "0"}
+          value={summary?.total_complaints != null ? summary.total_complaints.toLocaleString() : "—"}
           hint="all intake channels"
         />
         <Stat label="Repeat complaint rate" value={repeatRate} hint="unique customer handles" />
@@ -85,7 +89,7 @@ export default function Analytics() {
       </div>
       <div className="grid lg:grid-cols-2 gap-4">
         <Block t="Volume over time" s="Stacked by issue type from database">
-          <HourlyStack data={hourlySeries} phase={4} />
+          <HourlyStack data={hourlySeries} />
         </Block>
         <Block t="Complaints by issue category" s="AI classification breakdown">
           <Bars data={rootCauses} horizontal color="#14233F" height={300} />
@@ -108,10 +112,6 @@ export default function Analytics() {
       <div className="mt-6">
         <NigeriaRiskMap />
       </div>
-
-      <p className="text-xs text-navy/40 mt-4">
-        Conflux HQ AI Intelligence Engine · Live FastAPI + SQLite telemetry.
-      </p>
     </>
   );
 }

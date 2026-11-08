@@ -32,31 +32,16 @@ const axis = {
 export function SpikeChart({
   series,
   labels,
-  phase = 4,
-  release,
-  releaseLabel = "Release v4.2.1",
+  releaseLabel,
   height = 280,
 }: {
   series: number[];
-  labels?: string[];
-  phase?: number;
-  release?: boolean;
+  labels: string[];
   releaseLabel?: string;
   height?: number;
 }) {
-  const resolvedLabels =
-    labels && labels.length === series.length
-      ? labels
-      : series.map((_, idx) => {
-          const totalMin = 9 * 60 + 30 + idx * 5;
-          const hh = String(Math.floor(totalMin / 60) % 24).padStart(2, "0");
-          const mm = String(totalMin % 60).padStart(2, "0");
-          return `${hh}:${mm}`;
-        });
-  const releaseIdx = Math.min(6, Math.floor(series.length / 3));
-  const shown = phase >= 2 ? series.length : phase === 1 ? releaseIdx + 4 : Math.max(1, releaseIdx - 1);
-  const data = resolvedLabels.map((t, i) => ({ t, v: i < shown ? series[i] : null }));
-  const refX = resolvedLabels[releaseIdx] || resolvedLabels[0];
+  const data = labels.map((t, i) => ({ t, v: series[i] ?? 0 }));
+  const refX = releaseLabel && labels.length > 0 ? labels[Math.floor(labels.length / 3)] : undefined;
 
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -68,10 +53,14 @@ export function SpikeChart({
           </linearGradient>
         </defs>
         <CartesianGrid vertical={false} stroke="#14233F" strokeOpacity={0.06} />
-        <XAxis dataKey="t" {...axis} interval={Math.max(1, Math.floor(resolvedLabels.length / 7))} />
+        <XAxis
+          dataKey="t"
+          {...axis}
+          interval={labels.length > 7 ? Math.floor(labels.length / 7) : 0}
+        />
         <YAxis {...axis} />
         <Tooltip {...tip} />
-        {release && phase >= 1 && refX && (
+        {releaseLabel && refX && (
           <ReferenceLine
             x={refX}
             stroke="#14233F"
@@ -88,7 +77,7 @@ export function SpikeChart({
         <Area
           type="monotone"
           dataKey="v"
-          name="Complaints / bucket"
+          name="Complaints"
           stroke="#E8651A"
           strokeWidth={2.5}
           fill="url(#g)"
@@ -99,11 +88,10 @@ export function SpikeChart({
   );
 }
 
-export function HourlyStack({ data, phase = 4 }: { data: HourlyBucket[]; phase?: number }) {
-  const shown = phase >= 2 ? data : data.slice(0, Math.max(2, Math.floor(data.length * 0.65)));
+export function HourlyStack({ data }: { data: HourlyBucket[] }) {
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <AreaChart data={shown} margin={{ left: -20, right: 8 }}>
+      <AreaChart data={data} margin={{ left: -20, right: 8 }}>
         <CartesianGrid vertical={false} stroke="#14233F" strokeOpacity={0.06} />
         <XAxis dataKey="h" {...axis} />
         <YAxis {...axis} />
@@ -206,7 +194,7 @@ export function TrendLine({ data }: { data: { d: string; min: number }[] }) {
         <Line
           type="monotone"
           dataKey="min"
-          name="Volume / Trend"
+          name="Complaints"
           stroke="#14233F"
           strokeWidth={2.5}
           dot={{ r: 4, fill: "#E8651A", stroke: "#fff", strokeWidth: 2 }}

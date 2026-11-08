@@ -9,8 +9,6 @@ import NigeriaRiskMap from "@/components/dashboard/NigeriaRiskMap";
 
 export default function Overview() {
   const {
-    role,
-    phase,
     incidents,
     summary,
     transactionsAnalytics,
@@ -22,13 +20,15 @@ export default function Overview() {
   const live = incidents.slice().sort((a, b) => b.priority - a.priority);
   const topIncident = live[0] || null;
 
-  const complaintsCount = summary?.total_complaints
-    ? summary.total_complaints.toLocaleString()
-    : "0";
+  const complaintsCount =
+    summary?.total_complaints !== undefined
+      ? summary.total_complaints.toLocaleString()
+      : "—";
 
-  const exposureFormatted = summary?.money_at_risk
-    ? `₦${(Number(summary.money_at_risk) / 1_000_000).toFixed(1)}m`
-    : topIncident?.moneyAtRisk || "₦0";
+  const exposureFormatted =
+    summary?.money_at_risk !== undefined
+      ? `₦${(Number(summary.money_at_risk) / 1_000_000).toFixed(2)}m`
+      : "—";
 
   const openIncidentsCount =
     summary?.open_incidents !== undefined
@@ -40,47 +40,19 @@ export default function Overview() {
     0
   );
 
-  const failedRatePct = transactionsAnalytics?.failed_rate
-    ? `${(transactionsAnalytics.failed_rate * 100).toFixed(1)}%`
-    : "0%";
+  const failedRatePct =
+    transactionsAnalytics?.failed_rate !== undefined
+      ? `${(transactionsAnalytics.failed_rate * 100).toFixed(1)}%`
+      : "—";
 
   const failedCount = transactionsAnalytics?.by_status?.failed ?? 0;
-
-  const ttdFormatted = summary?.avg_time_to_detect_seconds
-    ? `${Math.max(1, Math.round(summary.avg_time_to_detect_seconds / 60))} min`
-    : topIncident
-    ? "3 min"
-    : "—";
-
-  const topCauseName = topIncident?.causes?.[0]?.name || "Monitoring";
-  const topCauseConf = topIncident?.causes?.[0]?.confidence
-    ? `${topIncident.causes[0].confidence}% confidence`
-    : "investigating";
-
-  const kpis = {
-    agent: [
-      ["Open incidents", openIncidentsCount, "active in database"],
-      ["Awaiting approval", String(pendingDraftsCount), "AI drafts queued"],
-      ["Complaints monitored", complaintsCount, "across all channels"],
-    ],
-    it: [
-      ["Likely cause", topCauseName.slice(0, 22), topCauseConf],
-      ["Failed txn rate", failedRatePct, `${failedCount} failed transactions`],
-      ["Primary channels", topIncident ? topIncident.channels.slice(0, 2).join(" + ") : "All normal", "live switch telemetry"],
-    ],
-    management: [
-      ["Money at risk", exposureFormatted, "reported complaint exposure"],
-      ["Time to detect", ttdFormatted, "from spike onset"],
-      ["Unreversed txns", `${failedCount} cases`, "pending switch reversal"],
-    ],
-  }[role];
 
   return (
     <>
       <AnimatePresence mode="wait">
-        {topIncident && phase >= 2 ? (
+        {topIncident ? (
           <motion.div
-            key="alert"
+            key={topIncident.id}
             initial={{ opacity: 0, y: -16, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0 }}
@@ -96,15 +68,13 @@ export default function Overview() {
                   <span className="animate-ping absolute h-full w-full rounded-full bg-white opacity-70" />
                   <span className="relative h-2 w-2 rounded-full bg-white" />
                 </span>
-                LIVE THREAT DETECTED · {topIncident.detectedAt}
+                LIVE INCIDENT DETECTED · {topIncident.detectedAt}
               </p>
               <h2 className="text-2xl md:text-3xl font-semibold mt-1" style={{ letterSpacing: "-0.03em" }}>
                 {topIncident.title}
               </h2>
               <p className="opacity-90 mt-1">
-                {phase >= 3
-                  ? `Likely cause: ${topCauseName} (${topCauseConf}). ${pendingDraftsCount} drafts ready for approval.`
-                  : "AI Agent is correlating complaints with system events…"}
+                {topIncident.summary}
               </p>
             </div>
             <Link
@@ -125,9 +95,7 @@ export default function Overview() {
             <span className="w-3 h-3 rounded-full bg-emerald-500" />
             <p className="font-semibold text-navy">All systems normal.</p>
             <p className="text-navy/55">
-              {phase === 1
-                ? "Release deployed. Monitoring incoming multi-channel complaint streams…"
-                : "No active spikes. Watching 9 Nigerian banking issue categories."}
+              No active spikes detected across monitored banking channels.
             </p>
           </motion.div>
         )}
@@ -139,22 +107,40 @@ export default function Overview() {
         right={
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
             <Radio className="w-3.5 h-3.5 animate-pulse text-emerald-600" />
-            {isBackendLive ? "FastAPI Backend Live · 4s Polling" : "Connecting to FastAPI…"}
+            {isBackendLive ? "Live API Stream" : "Connecting API…"}
           </div>
         }
       />
 
-      <div className="grid sm:grid-cols-3 gap-4 mb-6">
-        {kpis.map(([l, v, h], i) => (
-          <Stat key={l} label={l} value={v} hint={h} accent={i === 0} />
-        ))}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <Stat
+          label="Open incidents"
+          value={openIncidentsCount}
+          hint={`${pendingDraftsCount} drafts awaiting sign-off`}
+          accent
+        />
+        <Stat
+          label="Complaints monitored"
+          value={complaintsCount}
+          hint="across all intake channels"
+        />
+        <Stat
+          label="Reported exposure"
+          value={exposureFormatted}
+          hint="from customer complaint amounts"
+        />
+        <Stat
+          label="Failed transaction rate"
+          value={failedRatePct}
+          hint={`${failedCount} failed switch transactions`}
+        />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4 mb-6">
         <Card className="lg:col-span-2 p-6">
           <h3 className="font-semibold text-navy mb-1">Complaints per hour by issue type</h3>
           <p className="text-sm text-navy/50 mb-4">Live stacked database distribution</p>
-          <HourlyStack data={hourlySeries} phase={phase} />
+          <HourlyStack data={hourlySeries} />
         </Card>
         <Card className="p-6">
           <h3 className="font-semibold text-navy mb-1">Channel breakdown</h3>

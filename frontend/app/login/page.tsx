@@ -26,8 +26,8 @@ export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "register">("login");
 
   // Sign-in state
-  const [identifier, setIdentifier] = useState("Zymic Bank");
-  const [password, setPassword] = useState("123");
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
 
   // Register state
@@ -49,10 +49,12 @@ export default function LoginPage() {
     setSuccessMsg(null);
     try {
       const res = await api.login(identifier.trim(), password);
-      setSuccessMsg(`Authenticated as ${res.user?.full_name || identifier} (${res.user?.bank?.name || "Zymic Bank"}). Redirecting…`);
+      setSuccessMsg(
+        `Authenticated as ${res.user?.full_name || identifier} (${res.user?.bank?.name || identifier}). Redirecting…`
+      );
       router.push("/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Invalid credentials. Try 'Zymic Bank' with password '123'.");
+      setError(err instanceof Error ? err.message : "Authentication failed. Please check your credentials.");
     } finally {
       setLoading(false);
     }
@@ -76,17 +78,14 @@ export default function LoginPage() {
       setSuccessMsg(`Bank tenant '${res.user?.bank?.name || bankName}' provisioned. Redirecting to console…`);
       router.push("/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed. Ensure password has 8+ chars with letters and numbers.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Registration failed. Ensure password has at least 8 characters with letters and numbers."
+      );
     } finally {
       setLoading(false);
     }
-  };
-
-  const fillDemoCredentials = () => {
-    setMode("login");
-    setIdentifier("Zymic Bank");
-    setPassword("123");
-    setError(null);
   };
 
   return (
@@ -117,7 +116,7 @@ export default function LoginPage() {
 
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/10 text-xs font-semibold text-flux-soft mb-6">
             <Radio className="w-3.5 h-3.5 text-flux animate-pulse" />
-            FastAPI + SQLite Real-Time Engine
+            Real-Time Complaint Intelligence Engine
           </div>
 
           <h1
@@ -145,7 +144,10 @@ export default function LoginPage() {
                 "Drafts customer holding messages and IT tickets while enforcing strict core-banking sign-off for reversals.",
               ],
             ].map(([title, desc]) => (
-              <div key={title} className="flex items-start gap-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4">
+              <div
+                key={title}
+                className="flex items-start gap-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4"
+              >
                 <CheckCircle2 className="w-5 h-5 text-flux shrink-0 mt-0.5" />
                 <div>
                   <p className="font-semibold text-sm text-white">{title}</p>
@@ -224,7 +226,7 @@ export default function LoginPage() {
                     Sign in to Console
                   </h2>
                   <p className="text-sm text-navy/55 mt-0.5">
-                    Authenticate against `/api/v1/auth/login`
+                    Enter your bank workspace and operator credentials
                   </p>
                 </div>
                 <div className="w-10 h-10 rounded-2xl bg-flux/10 flex items-center justify-center text-flux">
@@ -244,7 +246,7 @@ export default function LoginPage() {
                       required
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
-                      placeholder="Zymic Bank or operator@bank.com"
+                      placeholder="Enter bank name or operator email"
                       className="w-full rounded-2xl bg-navy/[0.03] border border-navy/10 pl-11 pr-4 py-3 text-sm text-navy outline-none focus:border-flux focus:bg-white transition-colors"
                     />
                   </div>
@@ -293,24 +295,6 @@ export default function LoginPage() {
                   )}
                 </button>
               </form>
-
-              <div className="mt-6 pt-5 border-t border-navy/[0.06]">
-                <div className="rounded-2xl bg-navy/[0.03] p-3.5 flex items-center justify-between gap-3">
-                  <div className="text-xs">
-                    <p className="font-semibold text-navy">Demo Bank Credentials</p>
-                    <p className="text-navy/55 font-mono mt-0.5">
-                      Bank: <b>Zymic Bank</b> · Password: <b>123</b>
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={fillDemoCredentials}
-                    className="px-3 py-1.5 rounded-full bg-flux/15 text-[#b84d0e] text-xs font-semibold hover:bg-flux/25 transition-colors shrink-0"
-                  >
-                    Fill Demo
-                  </button>
-                </div>
-              </div>
             </div>
           ) : (
             <div className="rounded-3xl bg-white border border-navy/[0.08] p-7 md:p-8 shadow-[0_20px_50px_-24px_rgba(20,35,63,.12)]">
@@ -320,7 +304,7 @@ export default function LoginPage() {
                     Onboard Bank Tenant
                   </h2>
                   <p className="text-sm text-navy/55 mt-0.5">
-                    Provision tenant &amp; first admin via `/api/v1/auth/register`
+                    Provision a dedicated bank tenant &amp; administrator account
                   </p>
                 </div>
                 <div className="w-10 h-10 rounded-2xl bg-flux/10 flex items-center justify-center text-flux">
@@ -340,7 +324,7 @@ export default function LoginPage() {
                       required
                       value={bankName}
                       onChange={(e) => setBankName(e.target.value)}
-                      placeholder="e.g. Access Bank PLC"
+                      placeholder="Enter bank institution name"
                       className="w-full rounded-2xl bg-navy/[0.03] border border-navy/10 pl-11 pr-4 py-2.5 text-sm text-navy outline-none focus:border-flux focus:bg-white"
                     />
                   </div>
@@ -354,7 +338,7 @@ export default function LoginPage() {
                     type="text"
                     value={cacNumber}
                     onChange={(e) => setCacNumber(e.target.value)}
-                    placeholder="e.g. RC-125094"
+                    placeholder="Corporate registration number"
                     className="w-full rounded-2xl bg-navy/[0.03] border border-navy/10 px-4 py-2.5 text-sm text-navy outline-none focus:border-flux focus:bg-white"
                   />
                 </div>
@@ -368,7 +352,7 @@ export default function LoginPage() {
                     required
                     value={adminName}
                     onChange={(e) => setAdminName(e.target.value)}
-                    placeholder="e.g. Adaeze Okonkwo"
+                    placeholder="Enter administrator full name"
                     className="w-full rounded-2xl bg-navy/[0.03] border border-navy/10 px-4 py-2.5 text-sm text-navy outline-none focus:border-flux focus:bg-white"
                   />
                 </div>
@@ -384,7 +368,7 @@ export default function LoginPage() {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="adaeze@accessbank.com"
+                      placeholder="Enter work email address"
                       className="w-full rounded-2xl bg-navy/[0.03] border border-navy/10 pl-11 pr-4 py-2.5 text-sm text-navy outline-none focus:border-flux focus:bg-white"
                     />
                   </div>

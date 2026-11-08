@@ -10,7 +10,6 @@ import {
   type HourlyBucket,
   type Incident,
   type IssueType,
-  type Role,
   type Sentiment,
   type Severity,
   type TraceStep,
@@ -31,11 +30,6 @@ import {
 } from "@/lib/api";
 
 interface Ctx {
-  role: Role;
-  setRole: (r: Role) => void;
-  phase: number;
-  replaying: boolean;
-  replay: () => Promise<void>;
   decisions: Record<string, Decision>;
   decide: (id: string, d: Exclude<Decision, "pending">, draftId?: string) => Promise<void>;
   audit: AuditEntry[];
@@ -53,6 +47,8 @@ interface Ctx {
   addComplaint: (c: Partial<Complaint> & { text: string }) => Promise<void>;
   pullSocialX: () => Promise<{ fetched: number; ingested: number }>;
   investigate: (incidentId: string) => Promise<void>;
+  detectNow: () => Promise<void>;
+  syncing: boolean;
   user: BackendUser | null;
   isAuthenticated: boolean;
   loginUser: (identifier: string, password: string) => Promise<BackendUser | null>;
@@ -78,25 +74,20 @@ export const useDash = () => {
   return v;
 };
 
-const nowHHMM = () => {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
-
 function formatTimeHHMM(iso?: string | null): string {
-  if (!iso) return nowHHMM();
+  if (!iso) return "—";
   try {
     const d = new Date(iso);
     if (!isNaN(d.getTime())) {
       return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
     }
   } catch {}
-  return nowHHMM();
+  return "—";
 }
 
 function formatNaira(amount: number): string {
   if (amount >= 1_000_000) {
-    return `₦${(amount / 1_000_000).toFixed(1)}m`;
+    return `₦${(amount / 1_000_000).toFixed(2)}m`;
   }
   if (amount >= 1_000) {
     return `₦${Math.round(amount).toLocaleString()}`;
@@ -105,7 +96,7 @@ function formatNaira(amount: number): string {
 }
 
 function formatLanguage(lang?: string | null): string {
-  if (!lang) return "English";
+  if (!lang) return "—";
   const clean = lang.replace(/_mix$/i, "").toLowerCase();
   if (clean === "en") return "English";
   return clean.charAt(0).toUpperCase() + clean.slice(1);
@@ -123,9 +114,9 @@ function mapBackendComplaint(b: BackendComplaint): Complaint {
     ussd: "In-app",
   };
   const channel: Channel = channelMap[b.channel?.toLowerCase()] || "In-app";
-  const issue: IssueType = (b.issue_type as IssueType) || (b.is_fraud ? "fraud_scam" : "failed_transfer");
-  const severity: Severity = (b.severity as Severity) || (b.is_fraud ? "critical" : "medium");
-  const sentiment: Sentiment = (b.sentiment as Sentiment) || "negative";
+  const issue: IssueType = (b.issue_type as IssueType) || "other";
+  const severity: Severity = (b.severity as Severity) || "low";
+  const sentiment: Sentiment = (b.sentiment as Sentiment) || "neutral";
   const amt = b.mentioned_amount != null ? Number(b.mentioned_amount) : null;
 
   return {
@@ -140,7 +131,7 @@ function mapBackendComplaint(b: BackendComplaint): Complaint {
     severity,
     sentiment,
     language: formatLanguage(b.language),
-    region: b.region || "Lagos",
+    region: b.region || "—",
     ref: b.customer_ref ? `****${b.customer_ref.slice(-4)}` : `****${b.id.slice(0, 4)}`,
     amount: amt,
     isFraud: Boolean(b.is_fraud || issue === "fraud_scam"),
@@ -152,10 +143,22 @@ function mapBackendComplaint(b: BackendComplaint): Complaint {
 
 function mapBackendTransaction(t: BackendTransactionItem): Txn {
   const amt = Number(t.amount || 0);
-  const channelLabel = t.txn_channel?.toUpperCase() === "USSD" ? "USSD" : t.txn_channel ? t.txn_channel.charAt(0).toUpperCase() + t.txn_channel.slice(1) : "App";
-  const typeLabel = t.txn_type ? t.txn_type.charAt(0).toUpperCase() + t.txn_type.slice(1) : "Transfer";
+  const channelLabel =
+    t.txn_channel?.toUpperCase() === "USSD"
+      ? "USSD"
+      : t.txn_channel
+      ? t.txn_channel.charAt(0).toUpperCase() + t.txn_channel.slice(1)
+      : "—";
+  const typeLabel = t.txn_type
+    ? t.txn_type.charAt(0).toUpperCase() + t.txn_type.slice(1)
+    : "—";
   const statusLabel = t.status === "failed" ? "Debited, not credited" : t.status;
-  const revLabel = t.reversal_status === "pending" ? "Pending" : t.reversal_status === "reversed" ? "Reversed" : "Not started";
+  const revLabel =
+    t.reversal_status === "pending"
+      ? "Pending"
+      : t.reversal_status === "reversed"
+      ? "Reversed"
+      : t.reversal_status || "—";
   return {
     id: t.id,
     ref: t.reference,
@@ -165,8 +168,8 @@ function mapBackendTransaction(t: BackendTransactionItem): Txn {
     amount: `₦${amt.toLocaleString()}`,
     status: statusLabel,
     reversal: revLabel,
-    switch: t.processor || "demo-switch-a",
-    region: t.region || "Lagos",
+    switch: t.processor || "—",
+    region: t.region || "—",
   };
 }
 
@@ -175,7 +178,10 @@ function mapBackendAudit(a: BackendAuditEntry): AuditEntry {
   const actorLabel =
     actorLower === "system" || actorLower === "detector"
       ? "Detector"
-      : actorLower.includes("agent") || a.action.startsWith("agent_") || a.action === "incident_investigated" || a.action === "draft_created"
+      : actorLower.includes("agent") ||
+        a.action.startsWith("agent_") ||
+        a.action === "incident_investigated" ||
+        a.action === "draft_created"
       ? "Agent"
       : a.action === "draft_decided" || a.action === "demo_login" || a.action === "user_login"
       ? "Human"
@@ -184,40 +190,26 @@ function mapBackendAudit(a: BackendAuditEntry): AuditEntry {
   let detail = "";
   const d = a.details || {};
   if (a.action === "agent_tool_call") {
-    detail = `${d.tool || "tool"}(${JSON.stringify(d.input || {})}) → ${d.summary || "verified"}`;
+    detail = `${d.tool || "tool"}(${JSON.stringify(d.input || {})}) → ${d.summary || ""}`;
   } else if (a.action === "spike_detected") {
-    detail = `${d.issue_type || "issue"} exceeded baseline (${d.count || 0} complaints vs baseline ${d.baseline || 1}).`;
+    detail = `${d.issue_type || "issue"} exceeded baseline (${d.count || 0} complaints vs baseline ${d.baseline || 0}).`;
   } else if (a.action === "incident_investigated") {
-    detail = `Root cause ranked at ${Math.round(Number(d.confidence || 0.9) * 100)}% confidence (${d.source || "rules"} engine).`;
+    detail = `Root cause ranked at ${Math.round(Number(d.confidence || 0) * 100)}% confidence (${d.source || "AI"}).`;
   } else if (a.action === "draft_created") {
-    detail = `Generated ${d.kind || "response"} draft via ${d.source || "AI"} engine.`;
+    detail = `Generated ${d.kind || "response"} draft (${d.source || "AI"}).`;
   } else if (a.action === "draft_decided") {
     detail = `Draft (${d.kind || "message"}) ${d.decision || "reviewed"} by operator.`;
-  } else if (a.action === "synthetic_data_seeded") {
-    detail = `Seeded ${d.complaints || 1000} complaints and ${d.transactions || 5000} transactions (seed ${d.seed || 42}).`;
-  } else if (a.action === "text_classified" || a.action === "complaint_classified") {
-    detail = `AI classified incoming complaint (${a.entity_id?.slice(0, 8) || "live"}).`;
   } else if (Object.keys(d).length > 0) {
     detail = Object.entries(d)
       .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`)
       .join(" · ")
       .slice(0, 160);
   } else {
-    detail = `${a.entity_type || "record"} ${a.entity_id?.slice(0, 8) || ""}`.trim();
+    detail = `${a.entity_type || ""} ${a.entity_id?.slice(0, 8) || ""}`.trim();
   }
-
-  const phase =
-    a.action === "synthetic_data_seeded" || a.action === "demo_login"
-      ? 1
-      : a.action === "spike_detected"
-      ? 2
-      : a.action === "agent_tool_call" || a.action === "incident_investigated"
-      ? 3
-      : 4;
 
   return {
     id: a.id,
-    phase,
     time: formatTimeHHMM(a.created_at),
     actor: actorLabel,
     action: a.action,
@@ -234,23 +226,22 @@ function buildIncidentFromBackend(
   allComplaints: Complaint[],
   events: BackendSystemEvent[]
 ): Incident {
-  const issue = (b.issue_type as IssueType) || "failed_transfer";
+  const issue = (b.issue_type as IssueType) || "other";
   const issueComplaints = allComplaints.filter((c) => c.incidentId === b.id || c.issue === issue);
-  const allIssueComplaints = allComplaints.filter((c) => c.issue === issue);
-  const totalExposure = allIssueComplaints.reduce((acc, c) => acc + (c.amount || 0), 0);
+  const totalExposure = issueComplaints.reduce((acc, c) => acc + (c.amount || 0), 0);
 
-  // Build time series from complaints in 5-minute buckets around detection
+  // Build time series strictly from backend complaint timestamps
   const bucketMap = new Map<string, number>();
-  allIssueComplaints.slice(0, 120).forEach((c) => {
-    const key = c.time;
-    bucketMap.set(key, (bucketMap.get(key) || 0) + 1);
+  issueComplaints.forEach((c) => {
+    if (c.time && c.time !== "—") {
+      bucketMap.set(c.time, (bucketMap.get(c.time) || 0) + 1);
+    }
   });
-  const sortedTimes = Array.from(bucketMap.keys()).sort();
-  const series = sortedTimes.length >= 4 ? sortedTimes.slice(-16).map((k) => bucketMap.get(k) || 0) : [2, 3, 4, Math.max(8, Math.round(b.complaint_count * 0.4)), Math.max(15, Math.round(b.complaint_count * 0.75)), b.complaint_count];
-  const labels = sortedTimes.length >= 4 ? sortedTimes.slice(-16) : undefined;
+  const sortedTimes = Array.from(bucketMap.keys()).sort().slice(-16);
+  const series = sortedTimes.map((k) => bucketMap.get(k) || 0);
+  const labels = sortedTimes;
 
-  // Map candidate causes from backend likely_cause + system events
-  const confPct = Math.round((b.cause_confidence ?? 0.92) * 100);
+  const confPct = b.cause_confidence != null ? Math.round(b.cause_confidence * 100) : 0;
   const causes: Cause[] = [];
   if (b.likely_cause) {
     causes.push({
@@ -259,57 +250,26 @@ function buildIncidentFromBackend(
       evidence: b.summary || b.likely_cause,
     });
   }
-  events.forEach((ev, idx) => {
-    const label = `${ev.event_type === "release" ? "Release" : "Maintenance"} ${ev.version || ""} on ${ev.component}`.trim();
+  events.forEach((ev) => {
+    const label = `${ev.event_type.toUpperCase()} ${ev.version || ""} · ${ev.component}`.trim();
     if (!causes.some((c) => c.name.includes(ev.component))) {
       causes.push({
         name: label,
-        confidence: ev.event_type === "release" ? Math.max(65, confPct - 10) : Math.max(8, 18 - idx * 5),
+        confidence: ev.event_type === "release" ? Math.max(50, confPct - 10) : 10,
         evidence: ev.description,
       });
     }
   });
-  if (causes.length === 0) {
-    causes.push({
-      name: `${ISSUE_LABEL[issue]} anomaly cluster`,
-      confidence: confPct,
-      evidence: `${b.complaint_count} complaints exceeded baseline of ${b.baseline.toFixed(1)} (${b.growth_rate}× baseline).`,
-    });
-  }
 
-  // Map trace steps from real audit log tool calls
   const toolLogs = auditRows.filter((r) => r.action === "agent_tool_call");
-  const trace: TraceStep[] =
-    toolLogs.length > 0
-      ? toolLogs.map((r, idx) => {
-          const d = r.details || {};
-          return {
-            phase: idx < 2 ? 2 : idx < 4 ? 3 : 4,
-            tool: String(d.tool || "investigate_step"),
-            args: JSON.stringify(d.input || {}).replace(/[{"}]/g, ""),
-            result: String(d.summary || "Completed deterministic verification against bank ledger."),
-          };
-        })
-      : [
-          {
-            phase: 2,
-            tool: "get_incident_stats",
-            args: b.id.slice(0, 8),
-            result: `${b.complaint_count} complaints (${b.growth_rate}× baseline of ${b.baseline}).`,
-          },
-          {
-            phase: 3,
-            tool: "search_transactions",
-            args: `issue=${b.issue_type}`,
-            result: `Correlated complaint timestamps against failed switch transactions.`,
-          },
-          {
-            phase: 4,
-            tool: "create_drafts",
-            args: `incident=${b.id.slice(0, 8)}`,
-            result: `${drafts.length} operator drafts generated and awaiting human sign-off.`,
-          },
-        ];
+  const trace: TraceStep[] = toolLogs.map((r) => {
+    const d = r.details || {};
+    return {
+      tool: String(d.tool || r.action),
+      args: JSON.stringify(d.input || {}).replace(/[{"}]/g, ""),
+      result: String(d.summary || ""),
+    };
+  });
 
   const custDraft = drafts.find((d) => d.kind === "customer_message");
   const itDraft = drafts.find((d) => d.kind === "it_ticket");
@@ -318,18 +278,21 @@ function buildIncidentFromBackend(
   const channelsList =
     b.affected_channels && Object.keys(b.affected_channels).length > 0
       ? Object.keys(b.affected_channels).map((ch) => ch.toUpperCase().replace("_", "-"))
-      : ["IN-APP", "X", "USSD"];
+      : [];
 
-  const regionSet = Array.from(new Set(issueComplaints.map((c) => c.region).filter(Boolean))).slice(0, 3);
-  const regionStr = regionSet.length > 0 ? regionSet.join(", ") : "Lagos, Abuja, Kano";
+  const regionSet = Array.from(
+    new Set(issueComplaints.map((c) => c.region).filter((r) => r && r !== "—"))
+  ).slice(0, 4);
+  const regionStr = regionSet.length > 0 ? regionSet.join(", ") : "—";
 
-  const headline =
-    b.summary ||
-    `${ISSUE_LABEL[issue]} spike (${b.complaint_count} complaints, ${b.growth_rate}× baseline)`;
+  const releaseEv = events.find((e) => e.event_type === "release");
 
   return {
     id: b.id,
-    title: `${ISSUE_LABEL[issue]} spiking across ${channelsList.slice(0, 2).join(" & ")}`,
+    title:
+      channelsList.length > 0
+        ? `${ISSUE_LABEL[issue]} spike across ${channelsList.slice(0, 2).join(" & ")}`
+        : `${ISSUE_LABEL[issue]} incident`,
     issue,
     status:
       b.status === "resolved"
@@ -340,7 +303,7 @@ function buildIncidentFromBackend(
         ? "monitoring"
         : "active",
     rawStatus: b.status,
-    priority: b.priority_score || 80,
+    priority: b.priority_score || 0,
     startedAt: formatTimeHHMM(b.started_at),
     detectedAt: formatTimeHHMM(b.detected_at),
     startedAtIso: b.started_at,
@@ -354,24 +317,13 @@ function buildIncidentFromBackend(
     moneyAtRisk: formatNaira(totalExposure),
     series,
     labels,
-    releaseMarker: events.some((e) => e.event_type === "release"),
+    releaseLabel: releaseEv ? `${releaseEv.component} ${releaseEv.version || ""}`.trim() : undefined,
     causes,
     trace,
-    summary: {
-      agent:
-        custDraft?.content ||
-        `Customers reporting ${ISSUE_LABEL[issue].toLowerCase()} across ${channelsList.join(", ")}. Reassure customers that funds are safe and reversals are being processed.`,
-      it:
-        b.likely_cause ||
-        `Investigate ${ISSUE_LABEL[issue].toLowerCase()} path across ${channelsList.join(", ")}. Check recent deployment and switch logs.`,
-      management: `${headline} Estimated exposure across reported complaints: ${formatNaira(totalExposure)}.`,
-    },
-    customerDraft:
-      custDraft?.content ||
-      "We are aware of reports affecting transfers and are actively resolving pending reversals. Your funds remain safe.",
-    itTicket:
-      itDraft?.content ||
-      `Incident: ${b.issue_type}\nComplaints: ${b.complaint_count} (${b.growth_rate}x baseline)\nLikely cause: ${b.likely_cause || "Under investigation"}`,
+    summary: b.summary || b.likely_cause || `${b.complaint_count} complaints linked to this incident.`,
+    likelyCause: b.likely_cause,
+    customerDraft: custDraft?.content || "",
+    itTicket: itDraft?.content || "",
     reversalDraft: revDraft?.content,
     drafts: drafts.map((d) => ({
       id: d.id,
@@ -382,14 +334,11 @@ function buildIncidentFromBackend(
       decided_by: d.decided_by,
       decided_at: d.decided_at,
     })),
-    examples: issueComplaints.slice(0, 4).map((c) => c.text),
+    examples: issueComplaints.slice(0, 6).map((c) => c.text),
   };
 }
 
 export default function DashboardProvider({ children }: { children: React.ReactNode }) {
-  const [role, setRole] = useState<Role>("agent");
-  const [phase, setPhase] = useState(4);
-  const [replaying, setReplaying] = useState(false);
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [backendComplaints, setBackendComplaints] = useState<Complaint[]>([]);
   const [backendIncidents, setBackendIncidents] = useState<Incident[]>([]);
@@ -402,25 +351,34 @@ export default function DashboardProvider({ children }: { children: React.ReactN
   const [user, setUser] = useState<BackendUser | null>(null);
   const [isBackendLive, setIsBackendLive] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const investigatedRef = useRef<Set<string>>(new Set());
 
   const fetchBackendData = useCallback(async () => {
     try {
       await api.getAuthToken();
 
-      const [meRes, rawComplaints, rawIncidents, sumRes, trendsRes, txAnalyticsRes, txListRes, eventsRes, bankAuditRes] =
-        await Promise.all([
-          api.getMe().catch(() => null),
-          api.getComplaints({ limit: 500 }),
-          api.getIncidents(),
-          api.getSummary(72),
-          api.getTrends(72).catch(() => null),
-          api.getTransactionsAnalytics(72).catch(() => null),
-          api.getTransactions({ status: "failed", limit: 25 }).catch(() => ({ total: 0, items: [] })),
-          api.getSystemEvents(20).catch(() => ({ items: [] })),
-          api.getBankAudit(120).catch(() => []),
-        ]);
+      const [
+        meRes,
+        rawComplaints,
+        rawIncidents,
+        sumRes,
+        trendsRes,
+        txAnalyticsRes,
+        txListRes,
+        eventsRes,
+        bankAuditRes,
+      ] = await Promise.all([
+        api.getMe().catch(() => null),
+        api.getComplaints({ limit: 500 }),
+        api.getIncidents(),
+        api.getSummary(72),
+        api.getTrends(72).catch(() => null),
+        api.getTransactionsAnalytics(72).catch(() => null),
+        api.getTransactions({ status: "failed", limit: 25 }).catch(() => ({ total: 0, items: [] })),
+        api.getSystemEvents(20).catch(() => ({ items: [] })),
+        api.getBankAudit(120).catch(() => []),
+      ]);
 
       if (meRes) setUser(meRes);
 
@@ -434,22 +392,18 @@ export default function DashboardProvider({ children }: { children: React.ReactN
       if (eventsRes?.items) setSystemEvents(eventsRes.items);
       if (bankAuditRes) setAuditEntries(bankAuditRes.map(mapBackendAudit));
 
-      // Enrich each incident with its drafts & audit trace from backend
       let currentRawIncidents = rawIncidents || [];
       if (currentRawIncidents.length === 0 && mappedComplaints.length > 0) {
-        // Trigger spike detection if database has complaints but detection hasn't run yet
         const latestOccurred = rawComplaints[0]?.occurred_at;
         currentRawIncidents = await api.detectSpikes(latestOccurred).catch(() => []);
       }
 
       const enrichedIncidents: Incident[] = await Promise.all(
         currentRawIncidents.map(async (inc) => {
-          // Auto-investigate open uninvestigated incidents once so root-cause & drafts are ready
           if (!inc.likely_cause && !investigatedRef.current.has(inc.id)) {
             investigatedRef.current.add(inc.id);
             await api.investigateIncident(inc.id).catch(() => null);
-            const refreshed = await api.getIncident(inc.id).catch(() => inc);
-            inc = refreshed;
+            inc = await api.getIncident(inc.id).catch(() => inc);
           }
           const [drafts, incAudit] = await Promise.all([
             api.getIncidentDrafts(inc.id).catch(() => [] as BackendDraft[]),
@@ -459,7 +413,6 @@ export default function DashboardProvider({ children }: { children: React.ReactN
         })
       );
 
-      // Update decisions map from real draft statuses
       const nextDecisions: Record<string, Decision> = {};
       enrichedIncidents.forEach((inc) => {
         if (inc.drafts && inc.drafts.length > 0) {
@@ -501,9 +454,6 @@ export default function DashboardProvider({ children }: { children: React.ReactN
     };
   }, [fetchBackendData]);
 
-  useEffect(() => () => { if (timer.current) clearInterval(timer.current); }, []);
-
-  // Auth actions
   const loginUser = useCallback(
     async (identifier: string, password: string): Promise<BackendUser | null> => {
       const res = await api.login(identifier, password);
@@ -538,38 +488,21 @@ export default function DashboardProvider({ children }: { children: React.ReactN
     setUser(null);
   }, []);
 
-  // Replay scenario: seeds backend database, runs spike detection & AI investigation
-  const replay = useCallback(async () => {
-    if (timer.current) clearInterval(timer.current);
-    setDecisions({});
-    investigatedRef.current.clear();
-    setPhase(0);
-    setReplaying(true);
-
+  // Run live spike detection & refresh backend state
+  const detectNow = useCallback(async () => {
+    setSyncing(true);
     try {
-      const seeded = await api.seedScenario(true);
-      const detected = await api.detectSpikes(seeded.detection_at);
-      for (const inc of detected) {
-        investigatedRef.current.add(inc.id);
-        await api.investigateIncident(inc.id).catch(() => null);
-      }
+      const latestOccurred = backendComplaints[0]?.occurredAt;
+      await api.detectSpikes(latestOccurred);
+      await api.drainJobs().catch(() => null);
       await fetchBackendData();
     } catch (err) {
-      console.warn("Scenario replay error:", err);
+      console.warn("Spike detection error:", err);
+    } finally {
+      setSyncing(false);
     }
+  }, [backendComplaints, fetchBackendData]);
 
-    let p = 0;
-    timer.current = setInterval(() => {
-      p += 1;
-      setPhase(p);
-      if (p >= 4 && timer.current) {
-        clearInterval(timer.current);
-        setReplaying(false);
-      }
-    }, 1800);
-  }, [fetchBackendData]);
-
-  // Trigger AI investigation on a specific incident
   const investigate = useCallback(
     async (incidentId: string) => {
       await api.investigateIncident(incidentId);
@@ -578,7 +511,6 @@ export default function DashboardProvider({ children }: { children: React.ReactN
     [fetchBackendData]
   );
 
-  // Human-in-the-loop decision on drafts for an incident
   const decide = useCallback(
     async (id: string, d: Exclude<Decision, "pending">, specificDraftId?: string) => {
       setDecisions((s) => ({ ...s, [id]: d, ...(specificDraftId ? { [specificDraftId]: d } : {}) }));
@@ -602,7 +534,6 @@ export default function DashboardProvider({ children }: { children: React.ReactN
     [backendIncidents, fetchBackendData]
   );
 
-  // Real-time complaint ingestion
   const addComplaint = useCallback(
     async (c: Partial<Complaint> & { text: string }) => {
       const channelBackend =
@@ -612,8 +543,8 @@ export default function DashboardProvider({ children }: { children: React.ReactN
       await api.ingestComplaint({
         text: c.text,
         channel: channelBackend,
-        region: c.region || "Lagos",
-        language: c.language?.toLowerCase() || "en",
+        region: c.region,
+        language: c.language?.toLowerCase(),
         issue_type: c.issue,
       });
       await api.drainJobs().catch(() => null);
@@ -622,19 +553,17 @@ export default function DashboardProvider({ children }: { children: React.ReactN
     [fetchBackendData]
   );
 
-  // Pull live/recorded X mentions from backend social adapter
   const pullSocialX = useCallback(async () => {
     const res = await api.pullXPosts(15);
     await fetchBackendData();
     return { fetched: res.fetched, ingested: res.ingested };
   }, [fetchBackendData]);
 
-  // Compute hourly stacked series from real backend complaints
   const hourlySeries = useMemo<HourlyBucket[]>(() => {
     if (backendComplaints.length === 0) return [];
     const buckets = new Map<string, HourlyBucket>();
-    // Group complaints by hour HH:00
     backendComplaints.forEach((c) => {
+      if (!c.time || c.time === "—") return;
       const hourKey = `${c.time.slice(0, 2)}:00`;
       const existing = buckets.get(hourKey) || {
         h: hourKey,
@@ -656,12 +585,16 @@ export default function DashboardProvider({ children }: { children: React.ReactN
       .slice(-12);
   }, [backendComplaints]);
 
-  // Compute channel split from summary or live complaints
   const channelSplit = useMemo(() => {
     if (summary?.by_channel && Object.keys(summary.by_channel).length > 0) {
       return Object.entries(summary.by_channel)
         .map(([name, value]) => ({
-          name: name === "in_app" ? "In-app" : name === "x" ? "X" : name.charAt(0).toUpperCase() + name.slice(1),
+          name:
+            name === "in_app"
+              ? "In-app"
+              : name === "x"
+              ? "X"
+              : name.charAt(0).toUpperCase() + name.slice(1),
           value,
         }))
         .sort((a, b) => b.value - a.value);
@@ -673,7 +606,6 @@ export default function DashboardProvider({ children }: { children: React.ReactN
       .sort((a, b) => b.value - a.value);
   }, [summary, backendComplaints]);
 
-  // Compute region split from summary or live complaints
   const regionSplit = useMemo(() => {
     if (summary?.by_region && Object.keys(summary.by_region).length > 0) {
       return Object.entries(summary.by_region)
@@ -687,7 +619,6 @@ export default function DashboardProvider({ children }: { children: React.ReactN
       .sort((a, b) => b.value - a.value);
   }, [summary, backendComplaints]);
 
-  // Compute issue / root cause breakdown from summary or live complaints
   const rootCauses = useMemo(() => {
     const byIssue = summary?.by_issue_type || summary?.by_issue;
     if (byIssue && Object.keys(byIssue).length > 0) {
@@ -709,7 +640,6 @@ export default function DashboardProvider({ children }: { children: React.ReactN
       .sort((a, b) => b.value - a.value);
   }, [summary, backendComplaints]);
 
-  // Compute trend line from backend trend buckets
   const detectTrend = useMemo(() => {
     if (trendBuckets.length > 0) {
       return trendBuckets.slice(-12).map((b) => ({
@@ -726,11 +656,6 @@ export default function DashboardProvider({ children }: { children: React.ReactN
   return (
     <C.Provider
       value={{
-        role,
-        setRole,
-        phase,
-        replaying,
-        replay,
         decisions,
         decide,
         audit: auditEntries,
@@ -748,6 +673,8 @@ export default function DashboardProvider({ children }: { children: React.ReactN
         addComplaint,
         pullSocialX,
         investigate,
+        detectNow,
+        syncing,
         user,
         isAuthenticated: Boolean(user),
         loginUser,

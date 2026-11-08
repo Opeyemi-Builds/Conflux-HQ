@@ -23,7 +23,7 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
   const resolvedParams = use(params);
   const routeParams = useParams();
   const id = resolvedParams?.id ?? (routeParams?.id as string);
-  const { role, phase, decisions, decide, incidents, transactions, investigate, isBackendLive, isLoading } = useDash();
+  const { decisions, decide, incidents, transactions, investigate, isBackendLive, isLoading } = useDash();
   const [investigating, setInvestigating] = useState(false);
   const [deciding, setDeciding] = useState(false);
 
@@ -43,8 +43,11 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
   }
 
   const d = decisions[inc.id] ?? (inc.status === "resolved" ? "approved" : "pending");
-  const ready = phase >= 4;
-  const needsMoney = inc.issue === "failed_transfer" || inc.issue === "double_debit" || inc.issue === "pos" || inc.issue === "card_atm";
+  const needsMoney =
+    inc.issue === "failed_transfer" ||
+    inc.issue === "double_debit" ||
+    inc.issue === "pos" ||
+    inc.issue === "card_atm";
 
   const handleInvestigate = async () => {
     setInvestigating(true);
@@ -111,22 +114,16 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
 
       <Card className="p-6 mb-4 border-l-4 !border-l-flux">
         <p className="text-xs font-semibold tracking-wider text-flux mb-2">
-          {role === "agent"
-            ? "FOR CUSTOMER SERVICE"
-            : role === "it"
-            ? "FOR IT / ENGINEERING"
-            : "FOR MANAGEMENT"}
+          AI ROOT-CAUSE SUMMARY
         </p>
         <p className="text-lg md:text-xl text-navy leading-relaxed" style={{ letterSpacing: "-0.01em" }}>
-          {phase >= 3
-            ? inc.summary[role]
-            : "AI Agent is investigating system events and switch logs…"}
+          {inc.summary}
         </p>
       </Card>
 
       <div className="grid sm:grid-cols-4 gap-4 mb-4">
         <Stat label="Complaints" value={String(inc.volume)} hint={inc.growth} />
-        <Stat label="Channels" value={inc.channels.slice(0, 3).join(" + ")} hint="most affected" />
+        <Stat label="Channels" value={inc.channels.slice(0, 3).join(" + ") || "—"} hint="most affected" />
         <Stat label="Money at risk" value={inc.moneyAtRisk} hint="reported exposure" />
         <Stat label="Priority" value={`${inc.priority}/100`} hint="volume × growth" accent />
       </div>
@@ -139,19 +136,15 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
         <SpikeChart
           series={inc.series}
           labels={inc.labels}
-          phase={phase}
-          release={inc.releaseMarker}
+          releaseLabel={inc.releaseLabel}
         />
       </Card>
 
       <div className="grid lg:grid-cols-2 gap-4 mb-4">
         <Card className="p-6">
           <h3 className="font-semibold text-navy mb-4">Candidate causes (AI Ranked)</h3>
-          {phase < 3 ? (
-            <p className="text-navy/50 flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Checking release and outage logs…
-            </p>
+          {inc.causes.length === 0 ? (
+            <p className="text-navy/50 text-sm">No candidate causes ranked yet. Click Re-run AI Investigation.</p>
           ) : (
             <div className="space-y-5">
               {inc.causes.map((c, i) => (
@@ -178,10 +171,11 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
         </Card>
         <Card className="p-6">
           <h3 className="font-semibold text-navy mb-4">Agent investigation trace</h3>
-          <ol className="space-y-3">
-            {inc.trace
-              .filter((s) => s.phase <= phase)
-              .map((s, i) => (
+          {inc.trace.length === 0 ? (
+            <p className="text-navy/50 text-sm">No agent tool calls recorded for this incident yet.</p>
+          ) : (
+            <ol className="space-y-3">
+              {inc.trace.map((s, i) => (
                 <motion.li
                   key={`${s.tool}-${i}`}
                   initial={{ opacity: 0, x: -12 }}
@@ -199,21 +193,16 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
                   </div>
                 </motion.li>
               ))}
-            {phase < 4 && (
-              <li className="flex gap-3 text-navy/45 text-sm">
-                <Loader2 className="w-5 h-5 animate-spin shrink-0" />
-                Working…
-              </li>
-            )}
-          </ol>
+            </ol>
+          )}
         </Card>
       </div>
 
-      {needsMoney && phase >= 3 && transactions.length > 0 && (
+      {needsMoney && transactions.length > 0 && (
         <Card className="mb-4 overflow-hidden">
           <div className="px-6 pt-5 pb-2 flex items-center justify-between">
             <h3 className="font-semibold text-navy">Matched failed transactions from switch ledger</h3>
-            <Tag tone="flux">{transactions.length} failed records shown</Tag>
+            <Tag tone="flux">{transactions.length} failed records</Tag>
           </div>
           <TableWrap>
             <thead className="bg-navy/[0.03]">
@@ -267,12 +256,12 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
               </Tag>
             )}
           </div>
-          {ready ? (
+          {inc.customerDraft ? (
             <p className="text-navy/80 leading-relaxed bg-navy/[0.03] rounded-xl p-4">
               {inc.customerDraft}
             </p>
           ) : (
-            <p className="text-navy/45">Not drafted yet.</p>
+            <p className="text-navy/45">No customer message draft generated yet.</p>
           )}
         </Card>
         <Card className="p-6">
@@ -295,12 +284,12 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
               </Tag>
             )}
           </div>
-          {ready ? (
+          {inc.itTicket ? (
             <pre className="whitespace-pre-wrap text-sm font-mono text-navy/80 bg-navy/[0.03] rounded-xl p-4">
               {inc.itTicket}
             </pre>
           ) : (
-            <p className="text-navy/45">Not drafted yet.</p>
+            <p className="text-navy/45">No IT ticket draft generated yet.</p>
           )}
         </Card>
       </div>
@@ -342,7 +331,7 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
             <div className="flex gap-2">
               <button
                 onClick={() => handleDecision("rejected")}
-                disabled={!ready || deciding}
+                disabled={deciding}
                 className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full border border-navy/15 text-navy font-semibold hover:bg-navy/5 disabled:opacity-40 transition-colors"
               >
                 <X className="w-4 h-4" />
@@ -350,7 +339,7 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
               </button>
               <button
                 onClick={() => handleDecision("approved")}
-                disabled={!ready || deciding}
+                disabled={deciding}
                 className="inline-flex items-center gap-1.5 px-6 py-2.5 rounded-full bg-flux text-white font-semibold hover:bg-[#d25a14] disabled:opacity-40 transition-colors"
               >
                 {deciding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
@@ -366,7 +355,7 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
       {inc.examples.length > 0 && (
         <Card className="p-6 mt-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-navy">Sample complaints attached to this incident</h3>
+            <h3 className="font-semibold text-navy">Complaints attached to this incident</h3>
             <ClipboardCopy className="w-4 h-4 text-navy/35" />
           </div>
           <div className="grid md:grid-cols-3 gap-3">

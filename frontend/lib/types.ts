@@ -11,7 +11,6 @@ export type IssueType =
 
 export type Severity = "low" | "medium" | "high" | "critical";
 export type Channel = "X" | "Instagram" | "Facebook" | "Email" | "Call" | "Branch" | "In-app";
-export type Role = "agent" | "it" | "management";
 export type Sentiment = "angry" | "negative" | "neutral" | "positive";
 export type Decision = "pending" | "approved" | "rejected";
 
@@ -58,7 +57,6 @@ export interface Cause {
 }
 
 export interface TraceStep {
-  phase: number;
   tool: string;
   args: string;
   result: string;
@@ -93,15 +91,16 @@ export interface Incident {
   region: string;
   moneyAtRisk: string;
   series: number[];
-  labels?: string[];
-  releaseMarker?: boolean;
+  labels: string[];
+  releaseLabel?: string;
   causes: Cause[];
   trace: TraceStep[];
-  summary: Record<Role, string>;
+  summary: string;
+  likelyCause?: string | null;
   customerDraft: string;
   itTicket: string;
   reversalDraft?: string;
-  drafts?: DraftItem[];
+  drafts: DraftItem[];
   examples: string[];
 }
 
@@ -119,8 +118,7 @@ export interface Txn {
 }
 
 export interface AuditEntry {
-  id?: string;
-  phase: number;
+  id: string;
   time: string;
   actor: string;
   action: string;

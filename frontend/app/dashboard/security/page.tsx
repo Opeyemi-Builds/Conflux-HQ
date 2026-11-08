@@ -6,7 +6,7 @@ import { Card, PageHeader, SeverityBadge, Stat, Tag, Td, TableWrap, Th } from "@
 import { SpikeChart } from "@/components/dashboard/Charts";
 
 export default function Security() {
-  const { complaints, summary, phase, isBackendLive } = useDash();
+  const { complaints, summary, isBackendLive } = useDash();
   const [done, setDone] = useState(false);
 
   const rows = useMemo(
@@ -23,27 +23,29 @@ export default function Security() {
 
   const topRegions = useMemo(() => {
     const counts = new Map<string, number>();
-    rows.forEach((r) => counts.set(r.region, (counts.get(r.region) || 0) + 1));
+    rows.forEach((r) => {
+      if (r.region && r.region !== "—") {
+        counts.set(r.region, (counts.get(r.region) || 0) + 1);
+      }
+    });
     const sorted = Array.from(counts.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 2)
       .map(([reg]) => reg);
-    return sorted.length > 0 ? sorted.join(" & ") : "All regions";
+    return sorted.length > 0 ? sorted.join(" & ") : "—";
   }, [rows]);
 
   const fraudSeries = useMemo(() => {
     const buckets = new Map<string, number>();
-    rows.forEach((r) => buckets.set(r.time, (buckets.get(r.time) || 0) + 1));
+    rows.forEach((r) => {
+      if (r.time && r.time !== "—") {
+        buckets.set(r.time, (buckets.get(r.time) || 0) + 1);
+      }
+    });
     const keys = Array.from(buckets.keys()).sort();
-    if (keys.length >= 3) {
-      return {
-        labels: keys,
-        series: keys.map((k) => buckets.get(k) || 0),
-      };
-    }
     return {
-      labels: ["10:00", "10:05", "10:10", "10:15", "10:20", "10:25"],
-      series: [0, 1, 1, 2, 2, Math.max(1, rows.length)],
+      labels: keys,
+      series: keys.map((k) => buckets.get(k) || 0),
     };
   }, [rows]);
 
@@ -76,7 +78,7 @@ export default function Security() {
         <Stat
           label="Primary cluster"
           value={topRegions}
-          hint="fake-agent & OTP phishing"
+          hint="highest fraud report density"
         />
         <Stat
           label="Reported fraud exposure"
@@ -85,36 +87,39 @@ export default function Security() {
         />
       </div>
 
-      <Card className="p-6 mb-4">
-        <div className="flex flex-wrap items-start justify-between gap-4 mb-2">
-          <div className="flex gap-3">
-            <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center">
-              <ShieldAlert className="w-5 h-5 text-red-600" />
+      {rows.length > 0 && (
+        <Card className="p-6 mb-4">
+          <div className="flex flex-wrap items-start justify-between gap-4 mb-2">
+            <div className="flex gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center">
+                <ShieldAlert className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-navy">
+                  Active Fraud &amp; Social-Engineering Cluster ({topRegions})
+                </h3>
+                <p className="text-sm text-navy/55 max-w-xl mt-0.5">
+                  {rows[0]?.summary || rows[0]?.text}
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-semibold text-navy">
-                Fake-agent OTP social-engineering cluster ({topRegions})
-              </h3>
-              <p className="text-sm text-navy/55 max-w-xl mt-0.5">
-                Callers posing as bank agents request OTPs and account upgrades. Do not process as standard reversals; escalate affected customer references to Fraud Operations for account freeze review.
-              </p>
-            </div>
+            <button
+              onClick={() => setDone(true)}
+              disabled={done}
+              className="px-5 py-2.5 rounded-full bg-navy text-white font-semibold hover:bg-navy-600 disabled:opacity-50 transition-colors"
+            >
+              {done ? "Escalated to fraud ops & freeze team" : "Escalate to security ops"}
+            </button>
           </div>
-          <button
-            onClick={() => setDone(true)}
-            disabled={done || phase < 3}
-            className="px-5 py-2.5 rounded-full bg-navy text-white font-semibold hover:bg-navy-600 disabled:opacity-50 transition-colors"
-          >
-            {done ? "Escalated to fraud ops & freeze team" : "Escalate to security ops"}
-          </button>
-        </div>
-        <SpikeChart
-          series={fraudSeries.series}
-          labels={fraudSeries.labels}
-          phase={4}
-          height={200}
-        />
-      </Card>
+          {fraudSeries.labels.length > 0 && (
+            <SpikeChart
+              series={fraudSeries.series}
+              labels={fraudSeries.labels}
+              height={200}
+            />
+          )}
+        </Card>
+      )}
 
       <Card className="overflow-hidden">
         <TableWrap>

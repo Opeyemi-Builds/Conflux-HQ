@@ -58,7 +58,7 @@ export default function UseModes() {
                 </div>
                 <div className="flex flex-wrap items-center gap-6">
                   <a href="#trust" className="group inline-flex items-center gap-3 text-white font-medium"><span className="w-9 h-9 rounded-full bg-white/80 group-hover:bg-white transition-colors flex items-center justify-center"><ArrowRight className="w-4 h-4 text-navy" /></span>Know more</a>
-                  <Link href="/dashboard/incidents/INC-0421" className="text-sm font-medium text-flux-soft hover:text-white transition-colors underline underline-offset-4">Open Incident in Dashboard →</Link>
+                  <Link href="/dashboard/incidents/latest" className="text-sm font-medium text-flux-soft hover:text-white transition-colors underline underline-offset-4">Open Incident in Dashboard →</Link>
                 </div>
               </div>
             </div>
