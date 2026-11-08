@@ -10,11 +10,12 @@ from app.ai.classifier import classify as ai_classify_text
 from app.ai.drafts import create_drafts
 from app.core.config import get_settings
 from app.db.base import utcnow
-from app.models import Complaint, Draft, Incident, Job
-from app.models.enums import DraftStatus, IncidentStatus, JobKind, JobStatus
+from app.models import Complaint, Draft, Incident, Job, PaymentException
+from app.models.enums import DraftStatus, IncidentStatus, IssueType, JobKind, JobStatus
 from app.schemas.complaint import ComplaintClassification
 from app.services.audit import log_event
 from app.services.spike_detection import OPEN_STATUSES, bucket_start, run_detection
+from app.services.transaction_matching import create_exception_from_complaint
 
 LEASE_SECONDS = 60
 
@@ -100,6 +101,18 @@ def _handle_classify_complaint(db: Session, job: Job) -> dict:
     detect_at = b_start + timedelta(minutes=settings.spike_bucket_minutes - 1, seconds=59)
 
     if complaint.issue_type is not None:
+        existing_exception = db.scalar(
+            select(PaymentException).where(
+                PaymentException.bank_id == job.bank_id,
+                PaymentException.complaint_id == complaint.id,
+            )
+        )
+        if existing_exception is None and complaint.issue_type in {
+            IssueType.FAILED_TRANSFER,
+            IssueType.DOUBLE_DEBIT,
+            IssueType.FRAUD_SCAM,
+        }:
+            create_exception_from_complaint(db, complaint)
         enqueue_job(
             db,
             bank_id=job.bank_id,
@@ -144,6 +157,18 @@ def _handle_classify_complaint(db: Session, job: Job) -> dict:
             **{k: v for k, v in runtime.items() if k != "source"},
         },
     )
+    existing_exception = db.scalar(
+        select(PaymentException).where(
+            PaymentException.bank_id == job.bank_id,
+            PaymentException.complaint_id == complaint.id,
+        )
+    )
+    if existing_exception is None and classified.issue_type in {
+        IssueType.FAILED_TRANSFER,
+        IssueType.DOUBLE_DEBIT,
+        IssueType.FRAUD_SCAM,
+    }:
+        create_exception_from_complaint(db, complaint)
     enqueue_job(
         db,
         bank_id=job.bank_id,
