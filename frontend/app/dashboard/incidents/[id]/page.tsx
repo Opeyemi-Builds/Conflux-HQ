@@ -4,7 +4,6 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
-  CheckCircle2,
   ClipboardCopy,
   MessageSquare,
   RefreshCw,
@@ -13,7 +12,7 @@ import {
 } from "lucide-react";
 import { buildIncidentFromBackend, useDash } from "@/components/dashboard/Provider";
 import { Card, IssueBadge, PageHeader, Stat, Tag } from "@/components/dashboard/ui";
-import { api, ApiError, type BackendIncident, type BackendDraft, type BackendAuditEntry, type IncidentTimelineItem } from "@/lib/api";
+import { api, ApiError, type BackendIncident, type BackendDraft, type IncidentTimelineItem } from "@/lib/api";
 import { SpikeChart } from "@/components/dashboard/Charts";
 
 export default function IncidentPage({ params }: { params: Promise<{ id: string }> }) {
@@ -22,8 +21,8 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
 }
 
 function IncidentDetail({ id }: { id: string }) {
-  const { decide, complaints, investigate, isBackendLive, user } = useDash();
-  const [detail, setDetail] = useState<{ incident: BackendIncident; drafts: BackendDraft[]; audit: BackendAuditEntry[]; timeline: IncidentTimelineItem[] } | null>(null);
+  const { decide, complaints, investigate, user } = useDash();
+  const [detail, setDetail] = useState<{ incident: BackendIncident; drafts: BackendDraft[]; timeline: IncidentTimelineItem[] } | null>(null);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
   const [pending, setPending] = useState(false);
@@ -39,13 +38,12 @@ function IncidentDetail({ id }: { id: string }) {
       try {
         const incident = await api.getIncident(id);
         if (!active) return;
-        const [drafts, audit, timeline] = await Promise.all([
+        const [drafts, timeline] = await Promise.all([
           canWrite ? api.getIncidentDrafts(id).catch(() => []) : [],
-          canWrite ? api.getIncidentAudit(id).catch(() => []) : [],
           api.getIncidentTimeline(id).then((result) => result.timeline).catch(() => null),
         ]);
         if (!active) return;
-        setDetail({ incident, drafts, audit, timeline: timeline ?? [] });
+        setDetail({ incident, drafts, timeline: timeline ?? [] });
         if (!timeline) setError("The reconciliation timeline could not be loaded.");
       } catch (err) {
         if (active) {
@@ -58,7 +56,7 @@ function IncidentDetail({ id }: { id: string }) {
     return () => { active = false; };
   }, [canWrite, id, revision]);
 
-  const inc = detail && buildIncidentFromBackend(detail.incident, detail.drafts, detail.audit, complaints);
+  const inc = detail && buildIncidentFromBackend(detail.incident, detail.drafts, complaints);
   if (!inc) {
     return (
       <Card className="p-8 text-center">
@@ -107,12 +105,8 @@ function IncidentDetail({ id }: { id: string }) {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-navy/5 hover:bg-navy/10 text-navy text-xs font-semibold transition-colors disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${pending ? "animate-spin text-flux" : ""}`} />
-              {pending ? "Running AI Investigator…" : "Re-run AI Investigation"}
+              {pending ? "Investigation in progress…" : "Run investigation"}
             </button>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              {isBackendLive ? "Live Sync" : "Connecting"}
-            </span>
             <IssueBadge i={inc.issue} />
             <Tag
               tone={
@@ -134,7 +128,7 @@ function IncidentDetail({ id }: { id: string }) {
       {error && <p role="alert" className="mb-4 text-red-700">{error}</p>}
       <Card className="p-6 mb-4 border-l-4 !border-l-flux">
         <p className="text-xs font-semibold tracking-wider text-flux mb-2">
-          AI ROOT-CAUSE SUMMARY
+          INCIDENT SUMMARY
         </p>
         <p className="text-lg md:text-xl text-navy leading-relaxed" style={{ letterSpacing: "-0.01em" }}>
           {inc.summary}
@@ -160,11 +154,11 @@ function IncidentDetail({ id }: { id: string }) {
         />
       </Card>
 
-      <div className="grid lg:grid-cols-2 gap-4 mb-4">
+      <div className="mb-4">
         <Card className="p-6">
-          <h3 className="font-semibold text-navy mb-4">Backend cause assessment</h3>
+          <h3 className="font-semibold text-navy mb-4">Likely cause</h3>
           {inc.causes.length === 0 ? (
-            <p className="text-navy/50 text-sm">No backend cause assessment is available.</p>
+            <p className="text-navy/50 text-sm">A likely cause has yet to be identified.</p>
           ) : (
             <div className="space-y-5">
               {inc.causes.map((c, i) => (
@@ -187,33 +181,6 @@ function IncidentDetail({ id }: { id: string }) {
                 </div>
               ))}
             </div>
-          )}
-        </Card>
-        <Card className="p-6">
-          <h3 className="font-semibold text-navy mb-4">Agent investigation trace</h3>
-          {inc.trace.length === 0 ? (
-            <p className="text-navy/50 text-sm">No agent tool calls recorded for this incident yet.</p>
-          ) : (
-            <ol className="space-y-3">
-              {inc.trace.map((s, i) => (
-                <motion.li
-                  key={`${s.tool}-${i}`}
-                  initial={{ opacity: 0, x: -12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                  className="flex gap-3"
-                >
-                  <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                  <div className="min-w-0">
-                    <p className="font-mono text-sm text-navy">
-                      {s.tool}
-                      <span className="text-navy/40">({s.args})</span>
-                    </p>
-                    <p className="text-sm text-navy/60">{s.result}</p>
-                  </div>
-                </motion.li>
-              ))}
-            </ol>
           )}
         </Card>
       </div>

@@ -105,7 +105,7 @@ function Queue({ complaint, userId, admin }: { complaint: string; userId: string
           })}>Create from complaint</button>
         </div>
         {match && <>
-          <p>{match.selected_transaction_id ? `Backend candidate: ${match.selected_transaction_id}` : "Unresolved · No unique confident match."}</p>
+          <p>{match.selected_transaction_id ? `Suggested transaction · ${match.selected_transaction_id}` : "Unresolved · No unique confident match."}</p>
           <p className="text-sm text-navy/65">Candidates are investigative leads. Customer ownership and refund eligibility require verification.</p>
           <ol className="list-decimal space-y-2 pl-5">
             {match.candidates.map((candidate) => <li key={candidate.transaction_id} className="break-all">

@@ -1,12 +1,12 @@
 "use client";
 import { useMemo } from "react";
-import { Lock, ShieldAlert, Radio } from "lucide-react";
+import { Lock, ShieldAlert } from "lucide-react";
 import { useDash } from "@/components/dashboard/Provider";
 import { Card, PageHeader, SeverityBadge, Stat, Tag, Td, TableWrap, Th } from "@/components/dashboard/ui";
 import { SpikeChart } from "@/components/dashboard/Charts";
 
 export default function Security() {
-  const { complaints, summary, isBackendLive } = useDash();
+  const { complaints, summary } = useDash();
 
   const rows = useMemo(
     () => complaints.filter((c) => c.isFraud || c.issue === "fraud_scam"),
@@ -53,13 +53,9 @@ export default function Security() {
     <>
       <PageHeader
         title="Security queue"
-        sub="Fraud flags and scam classifications from the latest 500 complaints. Dashboard data updates by polling."
+        sub="Fraud flags and scam classifications from the latest 500 complaints."
         right={
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
-              <Radio className="w-3.5 h-3.5 animate-pulse text-emerald-600" />
-              {isBackendLive ? "Polling security data" : "Connecting…"}
-            </span>
             <Tag tone="red">
               <Lock className="w-3 h-3 inline -mt-0.5 mr-1" />
               Restricted
@@ -72,7 +68,7 @@ export default function Security() {
         <Stat
           label="Open fraud cases"
           value={String(summary?.fraud_count ?? rows.length)}
-          hint="routed automatically by AI"
+          hint="Flagged for review"
           accent
         />
         <Stat

@@ -213,7 +213,7 @@ export default function NigeriaRiskMap() {
             Nigeria Complaint &amp; Financial Threat Map
           </h2>
           <p className="text-sm text-navy/60">
-            Real-time multi-channel incident density across Nigerian states + FCT ({geoComplaintsData.length} live backend records).
+            Approximate complaint locations across Nigeria ({geoComplaintsData.length} mapped records).
           </p>
         </div>
 
@@ -288,7 +288,7 @@ export default function NigeriaRiskMap() {
           <p className="text-xs font-medium text-navy/50">Active Incidents</p>
           <div className="flex items-baseline gap-2 mt-1">
             <span className="text-2xl font-bold text-emerald-700">{incidents.filter((incident) => incident.status !== "resolved" && incident.rawStatus !== "dismissed").length} Open</span>
-            <span className="text-xs text-navy/50">AI Correlated</span>
+
           </div>
         </div>
       </div>
@@ -443,7 +443,6 @@ export default function NigeriaRiskMap() {
         <div className="absolute bottom-4 left-4 rounded-2xl bg-white/95 backdrop-blur-md border border-navy/10 p-3.5 shadow-lg text-xs space-y-2 max-w-[230px]">
           <div className="font-bold text-navy flex items-center justify-between">
             <span>RISK SEVERITY KEY</span>
-            <span className="text-[10px] font-mono text-navy/50">POLLING</span>
           </div>
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">

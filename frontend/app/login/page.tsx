@@ -132,7 +132,7 @@ export default function LoginPage() {
 
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/10 text-xs font-semibold text-flux-soft mb-6">
             <Radio className="w-3.5 h-3.5 text-flux animate-pulse" />
-            Real-Time Complaint Intelligence Engine
+            Banking Operations Console
           </div>
 
           <h1
@@ -142,13 +142,13 @@ export default function LoginPage() {
             Bank-grade complaint intelligence, ready for live operations.
           </h1>
           <p className="text-white/65 text-base md:text-lg mt-4 max-w-md leading-relaxed">
-            Sign in to monitor every Nigerian customer channel, detect systemic switch spikes within minutes, and review AI-drafted responses with human sign-off.
+            Sign in to monitor customer complaints, investigate payment incidents, and review proposed responses.
           </p>
 
           <div className="mt-10 space-y-4">
             {[
               [
-                "Multilingual AI Classification",
+                "Multilingual Complaint Classification",
                 "Classifies English, Pidgin, Yoruba, Hausa, and Igbo complaints across X, Instagram, USSD, App, and Branch.",
               ],
               [

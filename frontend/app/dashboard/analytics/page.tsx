@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { MapPin, Radio } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { Card, PageHeader, Stat } from "@/components/dashboard/ui";
 import { Bars, HourlyStack, TrendLine } from "@/components/dashboard/Charts";
 import NigeriaRiskMap from "@/components/dashboard/NigeriaRiskMap";
@@ -33,7 +33,6 @@ export default function Analytics() {
     regionSplit,
     rootCauses,
     detectTrend,
-    isBackendLive,
   } = useDash();
 
   const ttd =
@@ -63,10 +62,6 @@ export default function Analytics() {
         sub="Bank aggregates cover 72 hours. Sample charts and map use up to the latest 500 complaints."
         right={
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
-              <Radio className="w-3.5 h-3.5 animate-pulse text-emerald-600" />
-              {isBackendLive ? "Polling API" : "Connecting…"}
-            </span>
             <Link
               href="/dashboard/risk-map"
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-navy text-white text-xs font-semibold hover:bg-navy-600 transition-colors shadow-sm"
@@ -91,10 +86,10 @@ export default function Analytics() {
         <Block t="Volume over time" s="Latest complaint sample by issue and UTC hour">
           <HourlyStack data={hourlySeries} />
         </Block>
-        <Block t="Complaints by issue category" s="AI classification breakdown">
+        <Block t="Complaints by issue category" s="Complaint categories">
           <Bars data={rootCauses} horizontal color="#14233F" height={300} />
         </Block>
-        <Block t="Issues by channel" s="Channel breakdown from backend totals or latest complaint sample">
+        <Block t="Issues by channel" s="Channel breakdown from bank totals or the latest complaint sample">
           <Bars data={channelSplit} />
         </Block>
         <Block t="Issues by region" s="State &amp; geopolitical distribution">
@@ -102,7 +97,7 @@ export default function Analytics() {
         </Block>
         <Block
           t="Hourly complaint velocity"
-          s="Total complaints per hourly window from /api/v1/analytics/trends"
+          s="Complaint totals by hour"
           className="lg:col-span-2"
         >
           <TrendLine data={detectTrend} />

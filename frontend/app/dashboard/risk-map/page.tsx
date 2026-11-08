@@ -5,7 +5,7 @@ import { PageHeader, Stat } from "@/components/dashboard/ui";
 import NigeriaRiskMap from "@/components/dashboard/NigeriaRiskMap";
 
 export default function RiskMapPage() {
-  const { complaints, summary, incidents, isBackendLive } = useDash();
+  const { complaints, summary, incidents } = useDash();
 
   const totalExposure = summary?.money_at_risk
     ? `₦${(Number(summary.money_at_risk) / 1_000_000).toFixed(2)}M`
@@ -33,14 +33,6 @@ export default function RiskMapPage() {
       <PageHeader
         title="Geospatial Threat &amp; Complaint Map"
         sub="Approximate regional locations for the latest 500 complaints. Unmapped regions stay off the map."
-        right={
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-200">
-              <span className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
-              {isBackendLive ? `Active Hotspot: ${topRegion} (${topCount} cases)` : "Connecting…"}
-            </span>
-          </div>
-        }
       />
 
       <div className="grid sm:grid-cols-4 gap-4 mb-6">

@@ -9,7 +9,7 @@ const steps = [
   [Clock, "get_system_events", "Release v4.2.1 deployed at 10:00"],
   [FileText, "draft_message", "Holding message + IT ticket ready"],
 ] as const;
-const how = [["1", "Detect", "Complaints are classified by issue, severity, sentiment and language. A category rising faster than normal triggers an alert."], ["2", "Investigate", "An agent matches complaints to transactions, then checks release and outage logs."], ["3", "Decide", "It states the likely cause with a confidence level and ranks by money at risk."], ["4", "Act", "It drafts the message and IT ticket. A person approves, and every step is logged."]];
+const how = [["1", "Detect", "Complaints are classified by issue, severity, sentiment and language. A category rising faster than normal triggers an alert."], ["2", "Investigate", "Review transaction candidates alongside release and outage records."], ["3", "Decide", "Review likely causes, confidence levels, and reported exposure."], ["4", "Act", "Review customer messages and IT tickets before approval. Decisions are logged."]];
 export default function UseModes() {
   return (
     <>
@@ -41,7 +41,7 @@ export default function UseModes() {
               <motion.div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-flux/40 blur-3xl" animate={{ scale: [1, 1.25, 1] }} transition={{ duration: 9, repeat: Infinity }} />
               <div className="relative z-10 p-10 md:p-12">
                 <h3 className="text-white text-4xl md:text-5xl font-medium leading-tight mb-5" style={{ letterSpacing: "-0.03em" }}>Incident trace</h3>
-                <p className="text-white/70 text-base max-w-md mb-8">Every agent step is shown and logged. Low confidence is shown as low confidence, never hidden.</p>
+                <p className="text-white/70 text-base max-w-md mb-8">Review the evidence, confidence levels, and recorded decisions for each incident.</p>
                 <div className="space-y-3 mb-8">
                   {steps.map(([Icon, name, out], i) => (
                     <motion.div key={name} initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: 0.25 * i, duration: 0.5 }}

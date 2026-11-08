@@ -14,7 +14,6 @@ import {
   type IssueType,
   type Sentiment,
   type Severity,
-  type TraceStep,
 } from "@/lib/types";
 import {
   api,
@@ -146,13 +145,13 @@ function mapBackendAudit(a: BackendAuditEntry): AuditEntry {
   let detail = "";
   const d = a.details || {};
   if (a.action === "agent_tool_call") {
-    detail = `${d.tool || "tool"}(${JSON.stringify(d.input || {})}) → ${d.summary || ""}`;
+    detail = "Investigation step recorded.";
   } else if (a.action === "spike_detected") {
     detail = `${d.issue_type || "issue"} exceeded baseline (${d.count || 0} complaints vs baseline ${d.baseline || 0}).`;
   } else if (a.action === "incident_investigated") {
-    detail = `Root cause ranked at ${Math.round(Number(d.confidence || 0) * 100)}% confidence (${d.source || "AI"}).`;
+    detail = d.confidence == null ? "Investigation completed." : `Likely cause assessed at ${Math.round(Number(d.confidence) * 100)}% confidence.`;
   } else if (a.action === "draft_created") {
-    detail = `Generated ${d.kind || "response"} draft (${d.source || "AI"}).`;
+    detail = `Generated ${d.kind || "response"} draft.`;
   } else if (a.action === "draft_decided") {
     detail = `Draft (${d.kind || "message"}) ${d.decision || "reviewed"} by operator.`;
   } else if (Object.keys(d).length > 0) {
@@ -178,7 +177,6 @@ function mapBackendAudit(a: BackendAuditEntry): AuditEntry {
 export function buildIncidentFromBackend(
   b: BackendIncident,
   drafts: BackendDraft[],
-  auditRows: BackendAuditEntry[],
   allComplaints: Complaint[]
 ): Incident {
   const issue = (b.issue_type as IssueType) || "other";
@@ -206,16 +204,6 @@ export function buildIncidentFromBackend(
       evidence: b.summary || b.likely_cause,
     });
   }
-  const toolLogs = auditRows.filter((r) => r.action === "agent_tool_call");
-  const trace: TraceStep[] = toolLogs.map((r) => {
-    const d = r.details || {};
-    return {
-      tool: String(d.tool || r.action),
-      args: JSON.stringify(d.input || {}).replace(/[{"}]/g, ""),
-      result: String(d.summary || ""),
-    };
-  });
-
   const custDraft = drafts.find((d) => d.kind === "customer_message");
   const itDraft = drafts.find((d) => d.kind === "it_ticket");
   const revDraft = drafts.find((d) => d.kind === "reversal_request");
@@ -261,7 +249,6 @@ export function buildIncidentFromBackend(
     series,
     labels,
     causes,
-    trace,
     summary: b.summary || b.likely_cause || `${b.complaint_count} complaints linked to this incident.`,
     likelyCause: b.likely_cause,
     customerDraft: custDraft?.content || "",
@@ -374,7 +361,7 @@ function AuthenticatedDashboard({ children, user }: { children: React.ReactNode;
       const enrichedIncidents: Incident[] = await Promise.all(
         rawIncidents.map(async (inc) => {
           const drafts = canOperate ? await api.getIncidentDrafts(inc.id).catch(() => []) : [];
-          return buildIncidentFromBackend(inc, drafts, [], mappedComplaints);
+          return buildIncidentFromBackend(inc, drafts, mappedComplaints);
         })
       );
 

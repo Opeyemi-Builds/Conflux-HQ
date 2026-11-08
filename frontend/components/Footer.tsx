@@ -39,7 +39,7 @@ const navColumns = [
   {
     title: "Dashboard",
     links: [
-      { label: "Live Overview", href: "/dashboard" },
+      { label: "Operations overview", href: "/dashboard" },
       { label: "Geospatial Threat Map", href: "/dashboard/risk-map" },
       { label: "Active Incidents", href: "/dashboard/incidents/latest" },
       { label: "All Complaints Feed", href: "/dashboard/complaints" },
@@ -52,7 +52,7 @@ const navColumns = [
     title: "Channels",
     links: [
       { label: "USSD & Mobile Apps", href: "#channels" },
-      { label: "Pidgin NLP Intelligence", href: "#channels" },
+      { label: "Pidgin complaint support", href: "#channels" },
       { label: "Social Feeds (X, IG, FB)", href: "#channels" },
       { label: "Branch & Call Transcripts", href: "#channels" },
     ],
@@ -126,15 +126,8 @@ export default function Footer() {
               </span>
             </Link>
             <p className="text-navy/70 text-sm max-w-sm leading-relaxed">
-              AI complaint intelligence platform for banks. Detecting payment
-              settlement failures before they trend.
+              Complaint management, incident investigation, and payment reconciliation for banks.
             </p>
-            <div className="pt-2">
-              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-800 border border-emerald-500/20">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                Live backend telemetry stream active
-              </span>
-            </div>
           </div>
 
           <div className="md:col-span-7 grid grid-cols-2 sm:grid-cols-3 gap-8">

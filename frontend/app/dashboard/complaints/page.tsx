@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Search, Send, MessageSquarePlus, Loader2, Radio, RefreshCw } from "lucide-react";
+import { Search, Send, MessageSquarePlus, Loader2, RefreshCw } from "lucide-react";
 import { describeXResult } from "@/lib/social";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -10,7 +10,7 @@ import { Card, IssueBadge, PageHeader, SeverityBadge, Tag, Td, TableWrap, Th } f
 import { ISSUE_LABEL, type Channel, type Complaint, type IssueType } from "@/lib/types";
 
 export default function Complaints() {
-  const { addComplaint, pullSocialX, isBackendLive, user } = useDash();
+  const { addComplaint, pullSocialX, user } = useDash();
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [offset, setOffset] = useState(0);
   const [channel, setChannel] = useState("");
@@ -119,10 +119,6 @@ export default function Complaints() {
               <RefreshCw className={`w-3.5 h-3.5 ${isPullingX ? "animate-spin text-flux" : "text-flux"}`} />
               {isPullingX ? "Pulling X Stream…" : "Pull X Mentions"}
             </button>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
-              <Radio className="w-3.5 h-3.5 animate-pulse text-emerald-600" />
-              {isBackendLive ? "Dashboard polling" : "Connecting…"}
-            </span>
             <Tag tone="navy">{loading || listError ? "—" : complaints.length} records on page</Tag>
           </div>
         }

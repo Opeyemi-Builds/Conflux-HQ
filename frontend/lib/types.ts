@@ -56,12 +56,6 @@ export interface Cause {
   evidence: string;
 }
 
-export interface TraceStep {
-  tool: string;
-  args: string;
-  result: string;
-}
-
 export interface DraftItem {
   id: string;
   incident_id: string;
@@ -94,7 +88,6 @@ export interface Incident {
   labels: string[];
   releaseLabel?: string;
   causes: Cause[];
-  trace: TraceStep[];
   summary: string;
   likelyCause?: string | null;
   customerDraft: string;
