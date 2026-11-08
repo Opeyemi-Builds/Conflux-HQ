@@ -4,7 +4,7 @@ from app.models.enums import IssueType, Severity
 from .schemas import ClassificationResult
 
 KEYWORDS = {
-    "failed_transfer": ("don enter nowhere", "not credited", "no credit", "never reach", "transfer failed", "pending", "reversal", "unreversed", "debit without credit", "owo mi", "ti debited", "ko de"),
+    "failed_transfer": ("don enter nowhere", "not credited", "no credit", "never reach", "transfer failed", "pending", "reversal", "unreversed", "debit without credit", "did not receive", "didn't receive", "not received", "never receive", "receive my money", "money never reach", "money no enter", "my money since", "owo mi", "ti debited", "ko de"),
     "double_debit": ("debited twice", "double debit", "charged twice", "two times", "duplicate debit", "abụọ ugboro", "lọ ugboro abụọ", "nso ugboro abụọ"),
     "card_atm": ("atm", "card swallowed", "cash no come out", "ego ọpụpụ", "cash no dispensed"),
     "pos": ("pos", "terminal", "merchant", "muna samun al'amari"),

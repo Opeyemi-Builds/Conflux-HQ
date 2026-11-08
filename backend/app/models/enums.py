@@ -117,6 +117,42 @@ class BankStatus(str, enum.Enum):
     SUSPENDED = "suspended"
 
 
+class SettlementStatus(str, enum.Enum):
+    INITIATED = "initiated"
+    PROCESSING = "processing"
+    SUCCESSFUL = "successful"
+    FAILED = "failed"
+    PENDING = "pending"
+    REVERSED = "reversed"
+    PARTIALLY_SETTLED = "partially_settled"
+    UNKNOWN = "unknown"
+    DISPUTED = "disputed"
+    RECONCILED = "reconciled"
+
+
+class ExceptionType(str, enum.Enum):
+    DEBITED_NOT_CREDITED = "debited_not_credited"
+    FAILED_TRANSFER = "failed_transfer"
+    DELAYED_SETTLEMENT = "delayed_settlement"
+    REVERSED_NOT_REFUNDED = "reversed_not_refunded"
+    DUPLICATE_DEBIT = "duplicate_debit"
+    DUPLICATE_SETTLEMENT = "duplicate_settlement"
+    PROCESSOR_TIMEOUT = "processor_timeout"
+    SWITCH_OUTAGE = "switch_outage"
+    UNKNOWN_SETTLEMENT = "unknown_settlement"
+    FRAUD_DISPUTE = "fraud_dispute"
+
+
+class ReconciliationStatus(str, enum.Enum):
+    REPORTED = "reported"
+    TRANSACTION_MATCHED = "transaction_matched"
+    SETTLEMENT_CHECKED = "settlement_checked"
+    RECONCILIATION_PENDING = "reconciliation_pending"
+    APPROVAL_REQUIRED = "approval_required"
+    RESOLVED = "resolved"
+    REJECTED = "rejected"
+
+
 class JobKind(str, enum.Enum):
     CLASSIFY_COMPLAINT = "classify_complaint"
     DETECT_SPIKES = "detect_spikes"

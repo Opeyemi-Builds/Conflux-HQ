@@ -38,3 +38,15 @@ def get_incident(incident_id: uuid.UUID, user: AuthUser, db: DbSession):
     if not incident or incident.bank_id != user.bank_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Incident not found")
     return incident
+
+
+@router.get("/{incident_id}/reconciliation")
+def incident_reconciliation(incident_id: uuid.UUID, user: AuthUser, db: DbSession):
+    from app.services.reconciliation_reporting import summary, timeline
+
+    incident = db.get(Incident, incident_id)
+    if incident is None or incident.bank_id != user.bank_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Incident not found")
+    return {"incident_id": incident.id,
+            "reconciliation": summary(db, user.bank_id, incident.id),
+            "timeline": timeline(db, user.bank_id, incident)}

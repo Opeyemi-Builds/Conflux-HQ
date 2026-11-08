@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Complaint, Incident, SystemEvent, Transaction
+from app.models import Complaint, Incident, PaymentException, SystemEvent, Transaction
 from app.models.enums import ReversalStatus, TxnStatus
 
 _ISSUE_COMPONENT_KEYWORDS = {
@@ -136,7 +136,21 @@ def build_evidence(db: Session, bank_id, incident: Incident) -> dict:
     total_complaints = max(len(incident_complaints), 1)
     channel_shares = {ch: round(cnt / total_complaints, 2) for ch, cnt in channels.items()}
 
+    exceptions = db.scalars(
+        select(PaymentException).join(Complaint, PaymentException.complaint_id == Complaint.id).where(
+            PaymentException.bank_id == bank_id,
+            Complaint.bank_id == bank_id,
+            Complaint.incident_id == incident.id,
+        )
+    ).all()
+
     return {
+        "reconciliation": {
+            "exception_count": len(exceptions),
+            "by_status": dict(Counter(case.status.value for case in exceptions)),
+            "approval_required": sum(case.approval_required for case in exceptions),
+            "note": "Candidate matches are investigative leads, not proof of settlement or refund eligibility.",
+        },
         "incident": {
             "issue_type": incident.issue_type.value,
             "started_at": start.isoformat(),

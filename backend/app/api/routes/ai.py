@@ -102,6 +102,29 @@ def decide_draft(draft_id: uuid.UUID, payload: DraftDecision, user: Operator, db
     return draft
 
 
+@router.get("/audit")
+def bank_audit(user: AuthUser, db: DbSession, limit: int = Query(100, ge=1, le=500)):
+    from app.models import AuditLog
+    rows = db.execute(
+        select(AuditLog)
+        .where(AuditLog.bank_id == user.bank_id)
+        .order_by(AuditLog.created_at.desc())
+        .limit(limit)
+    ).scalars().all()
+    return [
+        {
+            "id": str(row.id),
+            "actor": row.actor,
+            "action": row.action,
+            "entity_type": row.entity_type,
+            "entity_id": row.entity_id,
+            "details": row.details,
+            "created_at": row.created_at,
+        }
+        for row in rows
+    ]
+
+
 @router.get("/incidents/{incident_id}/audit")
 def incident_audit(incident_id: uuid.UUID, user: Operator, db: DbSession):
     _incident(db, incident_id, user.bank_id)
