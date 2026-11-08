@@ -1,14 +1,9 @@
-<<<<<<< HEAD
 .env
 .env.*
 !.env.example
 *.pem
 *.key
 *.secret
-=======
-.env*
-!.env.example
->>>>>>> origin/main
 __pycache__/
 *.pyc
 .venv/

@@ -1,6 +1,10 @@
 from fastapi import APIRouter
 
 from app.api.routes import ai, analytics, auth, bank, complaints, health, incidents, jobs, reconciliation, social, synthetic
+
+from app.api.routes import ai, analytics, auth, bank, complaints, health, incidents, jobs, synthetic, social
+
+
 from app.core.config import get_settings
 
 api_router = APIRouter()
