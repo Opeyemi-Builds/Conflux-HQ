@@ -8,7 +8,7 @@ from sqlalchemy import extract, func, select
 
 from app.api.deps import AuthUser, DbSession
 from app.db.base import utcnow
-from app.models import Complaint, Incident, Transaction
+from app.models import Complaint, Incident, SocialReceipt, Transaction
 from app.models.enums import IncidentStatus, TxnStatus
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -59,6 +59,17 @@ class TrendBucket(BaseModel):
 
 class TrendsResponse(WindowResponse):
     buckets: list[TrendBucket]
+
+
+class SocialAnalyticsResponse(WindowResponse):
+    total_posts: int
+    unique_authors: int
+    total_engagement: int
+    high_reach_posts: int
+    reputation_risk_posts: int
+    average_reputation_score: float
+    top_reputation_flags: dict[str, int]
+    hourly_velocity: list[dict]
 
 
 class TransactionsResponse(WindowResponse):
@@ -196,6 +207,52 @@ def trends(user: AuthUser, db: DbSession, hours: Hours = 24, at: Anchor = None) 
 def breakdown(user: AuthUser, db: DbSession, hours: Hours = 24, at: Anchor = None) -> dict:
     window = _window(hours, at)
     return {**window, **_breakdown(db, _scope(Complaint, user, window))}
+
+
+@router.get("/social", response_model=SocialAnalyticsResponse)
+def social_analytics(user: AuthUser, db: DbSession, hours: Hours = 24, at: Anchor = None) -> dict:
+    """Summarize received social posts, engagement and reputation-risk velocity."""
+    window = _window(hours, at)
+    rows = db.scalars(
+        select(SocialReceipt).where(
+            SocialReceipt.bank_id == user.bank_id,
+            SocialReceipt.received_at >= window["window_start"],
+            SocialReceipt.received_at < window["window_end"],
+        )
+    ).all()
+    authors = set()
+    total_engagement = 0
+    high_reach = 0
+    risk_posts = 0
+    score_total = 0.0
+    flags: dict[str, int] = {}
+    buckets: dict[datetime, int] = {}
+    for row in rows:
+        metrics = row.public_metrics or {}
+        total_engagement += sum(max(0, int(metrics.get(key, 0) or 0)) for key in ("like_count", "retweet_count", "reply_count", "quote_count"))
+        if total_engagement:
+            pass
+        if "high_reach" in (row.reputation_flags or []):
+            high_reach += 1
+        if row.reputation_score >= 0.35:
+            risk_posts += 1
+        score_total += float(row.reputation_score or 0)
+        for flag in row.reputation_flags or []:
+            flags[flag] = flags.get(flag, 0) + 1
+        bucket = row.received_at.astimezone(timezone.utc).replace(minute=0, second=0, microsecond=0)
+        buckets[bucket] = buckets.get(bucket, 0) + 1
+        authors.add(row.post_id if not row.matched_aliases else f"{row.bank_id}:{row.post_id}")
+    cursor = window["window_start"].replace(minute=0, second=0, microsecond=0)
+    velocity = []
+    while cursor < window["window_end"]:
+        velocity.append({"bucket_start": cursor, "posts": buckets.get(cursor, 0)})
+        cursor += timedelta(hours=1)
+    return {**window, "total_posts": len(rows), "unique_authors": len(authors),
+            "total_engagement": total_engagement, "high_reach_posts": high_reach,
+            "reputation_risk_posts": risk_posts,
+            "average_reputation_score": round(score_total / len(rows), 4) if rows else 0.0,
+            "top_reputation_flags": dict(sorted(flags.items(), key=lambda item: (-item[1], item[0]))[:10]),
+            "hourly_velocity": velocity}
 
 
 @router.get("/transactions", response_model=TransactionsResponse)
