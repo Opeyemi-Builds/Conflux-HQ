@@ -12,7 +12,7 @@ from app.db.base import utcnow
 
 
 _CHANNEL_MAP = {
-    "app": "app",
+    "in_app": "app",
     "ussd": "ussd",
     "pos": "pos",
     "atm": "atm",
@@ -27,7 +27,9 @@ def _candidate_score(complaint: Complaint, transaction: Transaction) -> tuple[De
         score += Decimal("0.55")
         reasons.append("amount_matches")
     if complaint.occurred_at and transaction.occurred_at:
-        delta = abs((transaction.occurred_at - complaint.occurred_at).total_seconds())
+        txn_time = transaction.occurred_at.replace(tzinfo=timezone.utc) if transaction.occurred_at.tzinfo is None else transaction.occurred_at
+        complaint_time = complaint.occurred_at.replace(tzinfo=timezone.utc) if complaint.occurred_at.tzinfo is None else complaint.occurred_at
+        delta = abs((txn_time - complaint_time).total_seconds())
         if delta <= 15 * 60:
             score += Decimal("0.30")
             reasons.append("within_15_minutes")
@@ -48,14 +50,13 @@ def find_transaction_matches(
     limit: int = 10,
 ) -> list[tuple[Transaction, Decimal, list[str]]]:
     """Return ranked same-bank transaction candidates using explainable evidence."""
-    start = complaint.occurred_at - timedelta(hours=2)
-    end = complaint.occurred_at + timedelta(hours=2)
+    start = complaint.occurred_at - timedelta(hours=2) if complaint.occurred_at else None
+    end = complaint.occurred_at + timedelta(hours=2) if complaint.occurred_at else None
+    filters = [Transaction.bank_id == complaint.bank_id]
+    if start is not None and end is not None:
+        filters.extend([Transaction.occurred_at >= start, Transaction.occurred_at <= end])
     transactions = db.scalars(
-        select(Transaction).where(
-            Transaction.bank_id == complaint.bank_id,
-            Transaction.occurred_at >= start,
-            Transaction.occurred_at <= end,
-        )
+        select(Transaction).where(*filters)
     ).all()
     ranked = [(txn, *_candidate_score(complaint, txn)) for txn in transactions]
     ranked.sort(key=lambda item: (item[1], item[0].occurred_at), reverse=True)
@@ -82,8 +83,17 @@ def create_exception_from_complaint(
     *,
     min_confidence: Decimal = Decimal("0.55"),
 ) -> PaymentException:
+    existing = db.scalar(select(PaymentException).where(
+        PaymentException.bank_id == complaint.bank_id,
+        PaymentException.complaint_id == complaint.id,
+    ))
+    if existing is not None:
+        return existing
     candidates = find_transaction_matches(db, complaint)
     selected = candidates[0] if candidates and candidates[0][1] >= min_confidence else None
+    # Equal-scoring candidates are ambiguous and must remain unlinked for review.
+    if selected and len(candidates) > 1 and candidates[1][1] == selected[1]:
+        selected = None
     transaction = selected[0] if selected else None
     confidence = selected[1] if selected else None
     reasons = selected[2] if selected else ["no_confident_transaction_match"]
@@ -94,7 +104,8 @@ def create_exception_from_complaint(
         exception_type=exception_type_for(complaint, transaction),
         status=(ReconciliationStatus.TRANSACTION_MATCHED if transaction else ReconciliationStatus.REPORTED),
         settlement_status=(
-            SettlementStatus.FAILED if transaction and transaction.status == TxnStatus.FAILED
+            SettlementStatus.SUCCESSFUL if transaction and transaction.status == TxnStatus.SUCCESSFUL
+            else SettlementStatus.FAILED if transaction and transaction.status == TxnStatus.FAILED
             else SettlementStatus.PENDING if transaction and transaction.status == TxnStatus.PENDING
             else SettlementStatus.REVERSED if transaction and transaction.status == TxnStatus.REVERSED
             else SettlementStatus.UNKNOWN
