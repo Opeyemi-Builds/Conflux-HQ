@@ -26,7 +26,7 @@ from app.models.enums import BankStatus, Channel, IssueType, JobKind, Sentiment,
 from app.services.audit import log_event
 from app.services.complaint_service import _enqueue_for_complaint
 from app.services.demo_auth import DEMO_BANK_ID
-from app.services.social_intake import AliasBatch, SocialEvent, analyze, matches
+from app.services.social_intake import AliasBatch, SocialEvent, analyze, matches, reputation_signals
 from app.services.worker import drain_jobs, enqueue_job
 
 router = APIRouter(prefix="/social", tags=["social monitoring"])
@@ -263,6 +263,7 @@ def ingest_social_event(db: Session, event: SocialEvent) -> dict:
         db.add(complaint)
         db.flush()
         _enqueue_for_complaint(db, bank_id, complaint)
+        reputation = reputation_signals(event.text, event.public_metrics)
         receipt = SocialReceipt(
             bank_id=bank_id,
             platform=event.platform,
@@ -270,7 +271,10 @@ def ingest_social_event(db: Session, event: SocialEvent) -> dict:
             complaint_id=complaint.id,
             source_url=event.source_url,
             matched_aliases=clean_aliases,
-            analysis_method="demo_rules_v1",
+            public_metrics=event.public_metrics,
+            reputation_flags=reputation["flags"],
+            reputation_score=reputation["score"],
+            analysis_method="demo_rules_v2",
         )
         db.add(receipt)
         log_event(
@@ -285,6 +289,8 @@ def ingest_social_event(db: Session, event: SocialEvent) -> dict:
                 "post_hash": hashlib.sha256(event.post_id.encode()).hexdigest()[:16],
                 "matched_aliases": clean_aliases,
                 "analysis_method": receipt.analysis_method,
+                "reputation_flags": reputation["flags"],
+                "reputation_score": reputation["score"],
             },
         )
         created_complaint_ids.append(str(complaint.id))
@@ -333,7 +339,9 @@ def ingest_social_event(db: Session, event: SocialEvent) -> dict:
         "matched_aliases": sorted(set(all_aliases)),
         "issue_type": result.get("issue_type"),
         "is_fraud": result.get("is_fraud", False),
-        "analysis_method": "demo_rules_v1",
+        "analysis_method": "demo_rules_v2",
+        "reputation_flags": sorted(set(sum([reputation_signals(event.text, event.public_metrics)["flags"] for _ in [0]], []))),
+        "reputation_score": reputation_signals(event.text, event.public_metrics)["score"],
         "synthetic": event.synthetic,
         "source_url": event.source_url,
     }

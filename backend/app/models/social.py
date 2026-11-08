@@ -30,5 +30,8 @@ class SocialReceipt(Base):
     complaint_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("complaints.id"))
     source_url: Mapped[str | None] = mapped_column(String(500))
     matched_aliases: Mapped[list] = mapped_column(JSON)
+    public_metrics: Mapped[dict] = mapped_column(JSON, default=dict)
+    reputation_flags: Mapped[list] = mapped_column(JSON, default=list)
+    reputation_score: Mapped[float] = mapped_column(default=0.0)
     analysis_method: Mapped[str] = mapped_column(String(32), default="demo_rules_v1")
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
