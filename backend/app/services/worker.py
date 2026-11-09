@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.ai.agent import investigate_incident
 from app.ai.classifier import classify as ai_classify_text
+from app.ai.clustering import refresh_clusters
 from app.ai.drafts import create_drafts
 from app.core.config import get_settings
 from app.db.base import utcnow
@@ -142,6 +143,9 @@ def _handle_classify_complaint(db: Session, job: Job) -> dict:
             mentioned_time=result.mentioned_time,
             confidence=result.confidence,
             is_fraud=result.is_fraud,
+            payment_category=result.payment_category,
+            explanation=result.explanation,
+            evidence_phrases=result.evidence_phrases,
         ),
     )
     log_event(
@@ -258,6 +262,21 @@ def _handle_sync_social_rules(db: Session, job: Job) -> dict:
     return sync_stream_rules(db, actor="worker")
 
 
+def _handle_cluster_refresh(db: Session, job: Job) -> dict:
+    since = (
+        datetime.fromisoformat(job.payload["since"].replace("Z", "+00:00"))
+        if job.payload.get("since")
+        else None
+    )
+    until = (
+        datetime.fromisoformat(job.payload["until"].replace("Z", "+00:00"))
+        if job.payload.get("until")
+        else None
+    )
+    clusters = refresh_clusters(db, job.bank_id, since=since, until=until)
+    return {"cluster_count": len(clusters), "cluster_ids": [str(cluster.id) for cluster in clusters]}
+
+
 def _execute_job(db: Session, job: Job) -> dict:
     if job.payload.get("simulate_failure"):
         raise RuntimeError("Simulated worker failure for dead-letter testing")
@@ -271,6 +290,8 @@ def _execute_job(db: Session, job: Job) -> dict:
         return _handle_dispatch_approval(db, job)
     if job.kind == JobKind.SYNC_SOCIAL_RULES:
         return _handle_sync_social_rules(db, job)
+    if job.kind == JobKind.CLUSTER_REFRESH:
+        return _handle_cluster_refresh(db, job)
     raise ValueError(f"Unsupported job kind: {job.kind}")
 
 

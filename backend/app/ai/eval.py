@@ -1,4 +1,5 @@
-"""Golden 100-complaint evaluation harness (PRD §9, §13 & Engineering Concepts §6)."""
+"""Golden-set evaluation harness for the API sample and synthetic payment fixture."""
+import argparse
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -8,6 +9,7 @@ from app.ai.classifier import classify
 from app.ai.fallback import rules_classify
 
 GOLDEN_PATH = Path(__file__).resolve().parents[3] / "data" / "synthetic" / "golden_eval_100.json"
+SYNTHETIC_PAYMENT_PATH = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "golden_classification_synthetic.jsonl"
 
 
 def load_golden_set(path: Path | None = None) -> list[dict]:
@@ -83,3 +85,62 @@ def evaluate_golden_set(mode: Literal["rules", "auto"] = "rules", path: Path | N
         },
     }
 
+
+def evaluate_synthetic_payment_set(
+    *, live: bool = False, path: Path | None = None
+) -> dict:
+    """Evaluate the labeled synthetic fixture; live mode uses the configured provider."""
+    target = path or SYNTHETIC_PAYMENT_PATH
+    if not target.exists():
+        raise FileNotFoundError(f"Synthetic payment fixture not found at {target}")
+    rows = [json.loads(line) for line in target.read_text(encoding="utf-8").splitlines() if line.strip()]
+    by_group: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+    correct_confidence = []
+    incorrect_confidence = []
+    sources: dict[str, int] = defaultdict(int)
+    for row in rows:
+        if live:
+            result, source = classify(row["text"], row.get("channel", "unknown"))
+            sources[source] += 1
+        else:
+            result = rules_classify(row["text"])
+            sources["rules"] += 1
+        correct = result.payment_category == row["gold_payment_category"]
+        counts = by_group[row["group"]]
+        counts[1] += 1
+        if correct:
+            counts[0] += 1
+            correct_confidence.append(result.confidence)
+        else:
+            incorrect_confidence.append(result.confidence)
+
+    total = len(rows)
+    correct_total = sum(values[0] for values in by_group.values())
+    return {
+        "mode": "live" if live else "rules",
+        "total": total,
+        "overall_accuracy": round(correct_total / total, 4) if total else 0.0,
+        "accuracy_by_group": {
+            group: round(correct / count, 4) for group, (correct, count) in sorted(by_group.items())
+        },
+        "average_confidence_when_correct": (
+            round(sum(correct_confidence) / len(correct_confidence), 4) if correct_confidence else None
+        ),
+        "average_confidence_when_incorrect": (
+            round(sum(incorrect_confidence) / len(incorrect_confidence), 4)
+            if incorrect_confidence else None
+        ),
+        "sources": dict(sorted(sources.items())),
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Evaluate the synthetic payment classification fixture.")
+    parser.add_argument("--live", action="store_true", help="Use the configured AI provider instead of rules.")
+    args = parser.parse_args()
+    result = evaluate_synthetic_payment_set(live=args.live)
+    print(json.dumps(result, indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

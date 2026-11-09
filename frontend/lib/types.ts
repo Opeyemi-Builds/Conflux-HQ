@@ -45,6 +45,9 @@ export interface Complaint {
   amount?: number | null;
   isFraud?: boolean;
   confidence?: number | null;
+  paymentCategory?: string | null;
+  reviewStatus?: "auto" | "needs_review" | "reviewed";
+  routingQueue?: "standard" | "fraud_security" | "human_review";
   transactionId?: string | null;
   incidentId?: string | null;
   fresh?: boolean;

@@ -6,11 +6,11 @@ import anthropic
 from sqlalchemy.orm import Session
 
 from app.ai.evidence import build_evidence
-from app.ai.guardrails import verify_draft
+from app.ai.guardrails import check_outbound_text, verify_draft
 from app.ai.runtime import active_key, gemini_request, gemini_text
 from app.core.config import get_settings
 from app.models import Draft, Incident
-from app.models.enums import DraftKind, DraftStatus
+from app.models.enums import DraftKind, DraftStatus, IssueType
 from app.services.audit import log_event
 
 _PROMPTS = Path(__file__).parent / "prompts"
@@ -62,6 +62,46 @@ def _llm_draft_text(prompt_file: str, facts: dict) -> str | None:
     return None
 
 
+def _grounded_or_fallback_with_review(
+    db: Session,
+    bank_id,
+    incident_id,
+    kind: DraftKind,
+    prompt_file: str,
+    template_text: str,
+    facts: dict,
+    actor: str,
+) -> tuple[str, bool]:
+    candidate = _llm_draft_text(prompt_file, facts)
+    if not candidate:
+        return template_text, False
+    for attempt in range(2):
+        ok, ungrounded = verify_draft(candidate, facts)
+        violations = check_outbound_text(candidate)
+        if ok and not violations:
+            return candidate, False
+        log_event(
+            db,
+            bank_id=bank_id,
+            actor=actor,
+            action="draft_grounding_blocked" if ungrounded else "draft_safety_blocked",
+            entity_type="incident",
+            entity_id=str(incident_id),
+            details={
+                "kind": kind.value,
+                "attempt": attempt + 1,
+                "violations": violations,
+                "ungrounded_numbers": ungrounded,
+            },
+        )
+        if violations and attempt == 0:
+            candidate = _llm_draft_text(prompt_file, facts)
+            if candidate:
+                continue
+        break
+    return template_text, bool(violations)
+
+
 def _grounded_or_fallback(
     db: Session,
     bank_id,
@@ -72,22 +112,10 @@ def _grounded_or_fallback(
     facts: dict,
     actor: str,
 ) -> str:
-    candidate = _llm_draft_text(prompt_file, facts)
-    if not candidate:
-        return template_text
-    ok, ungrounded = verify_draft(candidate, facts)
-    if not ok:
-        log_event(
-            db,
-            bank_id=bank_id,
-            actor=actor,
-            action="draft_grounding_blocked",
-            entity_type="incident",
-            entity_id=str(incident_id),
-            details={"kind": kind.value, "ungrounded_numbers": ungrounded},
-        )
-        return template_text
-    return candidate
+    content, _ = _grounded_or_fallback_with_review(
+        db, bank_id, incident_id, kind, prompt_file, template_text, facts, actor
+    )
+    return content
 
 
 def create_drafts(db: Session, bank_id, incident: Incident, actor: str = "agent") -> list[Draft]:
@@ -124,27 +152,33 @@ def create_drafts(db: Session, bank_id, incident: Incident, actor: str = "agent"
         "Action: verify the affected payment path, review correlated logs, and assign an owner."
     )
 
-    customer_content = _grounded_or_fallback(
-        db, bank_id, incident.id, DraftKind.CUSTOMER_MESSAGE, "draft_message.md", customer_template, facts, actor
-    )
-    ticket_content = _grounded_or_fallback(
+    ticket_content, ticket_needs_review = _grounded_or_fallback_with_review(
         db, bank_id, incident.id, DraftKind.IT_TICKET, "draft_it_ticket.md", ticket_template, facts, actor
     )
 
-    drafts = [
-        Draft(
+    drafts = []
+    if incident.issue_type != IssueType.FRAUD_SCAM:
+        customer_content, customer_needs_review = _grounded_or_fallback_with_review(
+            db, bank_id, incident.id, DraftKind.CUSTOMER_MESSAGE, "draft_message.md", customer_template, facts, actor
+        )
+        drafts.append(
+            Draft(
             incident_id=incident.id,
             kind=DraftKind.CUSTOMER_MESSAGE,
             content=customer_content,
             status=DraftStatus.PENDING,
-        ),
+            needs_review=customer_needs_review,
+            )
+        )
+    drafts.append(
         Draft(
             incident_id=incident.id,
             kind=DraftKind.IT_TICKET,
             content=ticket_content,
             status=DraftStatus.PENDING,
-        ),
-    ]
+            needs_review=ticket_needs_review,
+        )
+    )
 
     tx_info = evidence.get("transactions", {})
     propose_reversal = getattr(

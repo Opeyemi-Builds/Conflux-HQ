@@ -31,6 +31,8 @@ Open http://localhost:8000/docs. The existing migrations create tables and enabl
 
 For **explicit offline development only**, set `DATABASE_URL=sqlite:///./conflux.db` and run the same migrations. Demo login still works without Supabase keys. Tests always use isolated in-memory SQLite.
 
+Complaint classification keeps the existing coarse `issue_type` contract and adds a payment-specific `payment_category`, short explanation and verbatim evidence phrases. Classifications below `CLASSIFICATION_REVIEW_THRESHOLD` (default `0.70`) are marked `needs_review` and routed to `human_review`; fraud classifications use `fraud_security`. Both stored and pasted complaints are PII-masked before classifier processing. Provider failures use the deterministic rules fallback and report `source: "rules"` / `method: "rules_fallback"`.
+
 ## 3. Login
 
 `POST /api/v1/auth/login`
@@ -60,7 +62,7 @@ The request creates:
 - 5,000 synthetic transactions, including failures on app/USSD through `demo-switch-a`.
 - Two synthetic system events: release v4.2.1 and an unrelated maintenance decoy.
 
-The response supplies `detection_at` and `release_at`. Dates are aligned to the request's 15-minute bucket; this example returns detection time 10:14:59 UTC and release time 09:48 UTC. Omit `at` to anchor around the present. Fixtures are pre-labelled, **not classified by AI**. Seed runs only for the demo bank and returns 409 if complaint/transaction/event data already exists. It never deletes or overwrites records; there is no reset endpoint. A fixed seed reproduces business values, not random UUID identifiers.
+The response supplies `detection_at` and `release_at`. Dates are aligned to the request's 15-minute bucket; this example returns detection time 10:14:59 UTC and release time 09:48 UTC. Omit `at` to anchor around the present. The seed stores deterministic rules-based payment categories and evidence metadata without calling an external AI provider, and creates the synthetic fraud queue cases. Seed runs only for the demo bank and returns 409 if complaint/transaction/event data already exists. A fixed seed reproduces business values, not random UUID identifiers.
 
 Pass returned `detection_at` as `now`:
 
@@ -93,7 +95,7 @@ All paths below have `/api/v1` prefix and require bearer authentication except h
 | POST | `/complaints` | Ingest a complaint with PII pattern masking and transactional job enqueue |
 | POST | `/complaints/bulk` | Ingest up to 5,000 complaints |
 | PATCH | `/complaints/{id}/classification` | Store caller-supplied labels |
-| POST | `/complaints/{id}/classify` | Classify a stored complaint via Claude/Gemini (with rules fallback) |
+| POST | `/complaints/{id}/classify` | Classify a stored complaint via Claude/Gemini (with rules fallback); returns payment category, evidence and review routing |
 | POST | `/incidents/detect` | Explicitly run statistical spike detection |
 | GET | `/incidents` | Ranked incidents; optional `status` |
 | GET | `/incidents/{id}` | Incident detail |
@@ -103,6 +105,13 @@ All paths below have `/api/v1` prefix and require bearer authentication except h
 | POST | `/ai/drafts/{id}/decision` | Approve or reject a draft (enqueues transactional outbox job; blocks direct reversal execution) |
 | GET | `/ai/incidents/{id}/audit` | Full audit trail for an incident |
 | GET | `/ai/evaluate` | Evaluate classifier accuracy & confusion matrix on the 100-item multilingual golden set |
+| POST | `/ai/clusters/refresh` | Recompute bank-scoped complaint clusters for a time window |
+| GET | `/ai/clusters` | List clusters with time/category/count filters |
+| GET | `/ai/clusters/{id}` | View cluster details with up to five masked complaint samples |
+| GET | `/ai/reputation/summary` | Aggregate public-signal triage, with no author handles or names |
+| GET | `/fraud/cases` | List bank-scoped, human-reviewed fraud/security cases |
+| GET | `/fraud/cases/{id}` | View a fraud case and masked complaint text |
+| PATCH | `/fraud/cases/{id}` | Update case status or assign an in-bank staff member |
 | GET | `/jobs` | Inspect queued, completed, or `dead_letter` worker jobs |
 | POST | `/jobs/drain` | Drain pending classification, detection, investigation, and approval outbox jobs |
 | GET | `/social/x/status` | Shared X v2 stream status, compiled tenant rules, and daily pay-per-use spend cap (`$0.005/post`) |
@@ -117,12 +126,27 @@ Complaint filters: `channel`, `issue_type`, `region`, `is_fraud`, `unclassified`
 
 No background scheduler exists: call detection explicitly. Review the OpenAPI schemas at `/docs` for complete payloads.
 
-## 6. Tests
+The deterministic reputation signal index is a demo triage heuristic, not a legal or reputational verdict. Drafts are checked for insults, promises, timelines and PII; an unsafe model draft is regenerated once, then replaced with a safe template marked `needs_review`.
+
+## 6. Test the AI endpoints in Postman
+
+Import [`backend/postman/Conflux-HQ AI Intelligence.postman_collection.json`](./postman/Conflux-HQ%20AI%20Intelligence.postman_collection.json) into Postman. Set `baseUrl` to `http://127.0.0.1:8000/api/v1` if using the local server. Run **Login** first; it saves the returned token to the collection's `accessToken` variable. The remaining requests inherit Bearer authentication.
+
+Run **Classify complaint (live Gemini when configured)** with the included synthetic failed-transfer text. A successful provider call returns `source: "llm"`, a Gemini model name, and nonzero token counts. `source: "rules"` means the provider call failed or no key is configured; check the backend log and `AI_PROVIDER`, `GEMINI_API_KEY`, and `GEMINI_MODEL`. The API key must stay in the backend `.env`, never in Postman.
+
+To try the aggregate endpoints, send **Refresh complaint clusters**, then **List complaint clusters**, **Reputation summary**, or **Fraud cases**. Cluster refresh may return zero clusters until enough complaints have been seeded/classified. The collection contains demo credentials only; never save real credentials or API keys in an exported collection.
+
+The Gemini model that was verified for this project is `gemini-3.8-flash`. If an existing `.env` explicitly sets the retired model `gemini-2.5-flash`, update `GEMINI_MODEL` and `GEMINI_FAST_MODEL` to `gemini-3.8-flash`, then restart the backend.
+
+## 7. Tests
 
 ```sh
 python -m pytest -q
+python -m app.ai.eval
+python -m app.ai.eval --live
+python scripts/smoke_ai_endpoints.py
 ```
 
-Tests cover demo credentials/token checks, synthetic seeding, analytics windows and bank isolation, complaint transaction links, repeat detection, plus the retained future Supabase Auth workflow with a fake provider. They do not prove live Supabase connectivity, PostgreSQL RLS enforcement or production readiness.
+The evaluation command measures the labeled synthetic payment fixture; `--live` uses the configured provider and can incur provider costs. The smoke script requires a fresh local demo database and uses the configured environment. Tests cover synthetic payment enrichment, clustering, fraud triage, grounded investigation, public-signal privacy, draft safety, authentication and tenant isolation. They do not prove live Supabase connectivity, PostgreSQL RLS enforcement or production readiness.
 
 `DEMO_MODE=false` restores the existing Supabase Auth registration/login/refresh and staff endpoints. Restart after changing mode because route selection happens at import time. That future mode needs actual Supabase Auth configuration and uses email/password rather than the demo username.

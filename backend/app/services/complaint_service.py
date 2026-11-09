@@ -11,6 +11,7 @@ from app.models.enums import JobKind
 from app.schemas.complaint import ComplaintClassification, ComplaintCreate
 from app.services.spike_detection import bucket_start
 from app.services.worker import enqueue_job
+from app.services.fraud import route_classification_to_fraud
 
 
 def build_complaint(bank_id: uuid.UUID, data: ComplaintCreate) -> Complaint:
@@ -79,8 +80,23 @@ def apply_classification(db: Session, complaint: Complaint, result: ComplaintCla
     complaint.mentioned_amount = result.mentioned_amount
     complaint.mentioned_time = result.mentioned_time
     complaint.classification_confidence = result.confidence
+    complaint.payment_category = result.payment_category
+    complaint.classification_explanation = result.explanation
+    complaint.evidence_phrases = result.evidence_phrases
+    threshold = get_settings().classification_review_threshold
+    if result.is_fraud:
+        complaint.review_status = "needs_review"
+        complaint.routing_queue = "fraud_security"
+    elif result.confidence < threshold:
+        complaint.review_status = "needs_review"
+        complaint.routing_queue = "human_review"
+    else:
+        complaint.review_status = "auto"
+        complaint.routing_queue = "standard"
     if result.language:
         complaint.language = result.language
     complaint.classified_at = utcnow()
+    db.flush()
+    route_classification_to_fraud(db, complaint, actor="classifier")
     db.commit()
     return complaint

@@ -159,6 +159,7 @@ class JobKind(str, enum.Enum):
     INVESTIGATE_INCIDENT = "investigate_incident"
     DISPATCH_APPROVAL = "dispatch_approval"
     SYNC_SOCIAL_RULES = "sync_social_rules"
+    CLUSTER_REFRESH = "cluster_refresh"
 
 
 class JobStatus(str, enum.Enum):

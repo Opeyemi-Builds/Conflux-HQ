@@ -57,6 +57,7 @@ def investigate_incident(db: Session, bank_id, incident: Incident, actor: str = 
     incident._ai_source = source
     incident._ai_model = telemetry.get("model", active_model(settings))
     incident._ai_prompt_version = telemetry.get("prompt_version")
+    incident._ai_method = telemetry.get("method", "rules_fallback")
     incident._ai_latency_ms = telemetry.get("latency_ms")
     incident._ai_input_tokens = telemetry.get("input_tokens", 0)
     incident._ai_output_tokens = telemetry.get("output_tokens", 0)
@@ -68,7 +69,7 @@ def investigate_incident(db: Session, bank_id, incident: Incident, actor: str = 
 
     top_cause = findings.candidate_causes[0] if findings.candidate_causes else None
     if top_cause:
-        likely_cause = top_cause.cause
+        likely_cause = findings.likely_cause or top_cause.cause
         # Preserve deterministic computed confidence when higher-resolution evidence exists
         confidence = top_cause.confidence
         summary = findings.headline
@@ -76,6 +77,7 @@ def investigate_incident(db: Session, bank_id, incident: Incident, actor: str = 
     incident.likely_cause = likely_cause
     incident.cause_confidence = confidence
     incident.summary = summary
+    incident.investigation_findings = findings.model_dump(mode="json")
     incident.status = IncidentStatus.AWAITING_APPROVAL
     db.commit()
 
@@ -89,6 +91,7 @@ def investigate_incident(db: Session, bank_id, incident: Incident, actor: str = 
         details={
             "confidence": confidence,
             "source": source,
+            "method": incident._ai_method,
             "trace_steps": len([entry for entry in trace if not entry.get("telemetry")]),
             "candidate_count": len(candidates),
             "evidence": evidence,

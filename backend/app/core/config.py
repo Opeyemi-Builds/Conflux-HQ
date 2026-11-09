@@ -46,11 +46,15 @@ class Settings(BaseSettings):
     anthropic_max_attempts: int = 2
 
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-2.5-flash"
-    gemini_fast_model: str = "gemini-2.5-flash"
-    gemini_timeout_seconds: float = 15.0
+    gemini_model: str = "gemini-3.8-flash"
+    gemini_fast_model: str = "gemini-3.8-flash"
+    gemini_timeout_seconds: float = 60.0
     gemini_max_retries: int = 1
     gemini_max_attempts: int = 2
+
+    classification_review_threshold: float = Field(default=0.70, ge=0, le=1)
+    cluster_window_minutes: int = Field(default=30, ge=5, le=1440)
+    cluster_min_size: int = Field(default=10, ge=2, le=10000)
 
     spike_bucket_minutes: int = 15
     spike_baseline_hours: int = 24

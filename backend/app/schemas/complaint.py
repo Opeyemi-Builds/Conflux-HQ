@@ -34,6 +34,9 @@ class ComplaintClassification(BaseModel):
     mentioned_amount: Decimal | None = None
     mentioned_time: str | None = None
     confidence: float = Field(0.0, ge=0, le=1)
+    payment_category: str | None = None
+    explanation: str | None = None
+    evidence_phrases: list[str] = Field(default_factory=list, max_length=10)
 
 
 class ComplaintRead(BaseModel):
@@ -54,6 +57,11 @@ class ComplaintRead(BaseModel):
     mentioned_amount: Decimal | None
     mentioned_time: str | None
     classification_confidence: float | None
+    payment_category: str | None = None
+    classification_explanation: str | None = None
+    evidence_phrases: list[str] = Field(default_factory=list)
+    review_status: str = "auto"
+    routing_queue: str = "standard"
     transaction_id: uuid.UUID | None
     incident_id: uuid.UUID | None
 

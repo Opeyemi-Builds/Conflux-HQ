@@ -8,5 +8,7 @@ from app.models.transaction import Transaction
 from app.models.social import BankAlias, SocialReceipt
 from app.models.payment_exception import PaymentException
 from app.models.payment_proposal import PaymentProposal
+from app.models.fraud_case import FraudCase
+from app.models.complaint_cluster import ComplaintCluster
 
-__all__ = ["AuditLog", "Bank", "BankAlias", "Complaint", "Draft", "Incident", "Job", "PaymentException", "PaymentProposal", "Profile", "SocialReceipt", "SystemEvent", "Transaction"]
+__all__ = ["AuditLog", "Bank", "BankAlias", "Complaint", "ComplaintCluster", "Draft", "FraudCase", "Incident", "Job", "PaymentException", "PaymentProposal", "Profile", "SocialReceipt", "SystemEvent", "Transaction"]

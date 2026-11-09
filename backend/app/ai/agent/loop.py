@@ -6,6 +6,7 @@ import anthropic
 from pydantic import ValidationError
 
 from app.ai.evidence import rank_events
+from app.ai.investigation import validate_findings
 from app.ai.runtime import active_model, gemini_function_calls, gemini_request, prompt_version, usage
 from app.ai.schemas import CandidateCause, Evidence, Findings
 from app.core.config import get_settings
@@ -19,14 +20,24 @@ def fallback_findings(evidence: dict) -> Findings:
     incident = evidence["incident"]
     tx = evidence.get("transactions", {})
     ranked = rank_events(evidence)
-    releases = [item for item in ranked if item["event"].get("type") == "release"]
+    incident_at = incident.get("started_at", "")
+    releases = [
+        item for item in ranked
+        if item["event"].get("type") == "release"
+        and item["score"] >= 0.5
+        and item["event"].get("starts_at", "") <= incident_at
+        and not any(word in (item["event"].get("description") or "").casefold() for word in ("decoy", "unrelated"))
+    ]
     dominant_switch = tx.get("dominant_processor")
     if not dominant_switch and tx.get("failed_by_processor"):
         by_proc = tx["failed_by_processor"]
         dominant_switch = max(by_proc.items(), key=lambda item: item[1])[0] if max(by_proc.values(), default=0) > 0 else None
 
     if releases and tx.get("failed", 0) > 0:
-        top = releases[0]
+        top = max(
+            releases,
+            key=lambda item: incident_at != "" and item["event"].get("starts_at", "") or "",
+        )
         release = top["event"]
         switch_note = f" via {dominant_switch}" if dominant_switch else ""
         detail = (
@@ -36,21 +47,66 @@ def fallback_findings(evidence: dict) -> Findings:
         confidence = top["score"]
         source = Evidence(source="system_events", detail=detail)
     else:
-        detail = f"{incident['complaint_count']} complaints against a {incident['baseline']} baseline; no confirmed single cause"
+        detail = "unknown"
         confidence = 0.3
-        source = Evidence(source="baseline", detail=detail)
+        source = Evidence(
+            source="baseline",
+            detail=f"{incident['complaint_count']} complaints against a {incident['baseline']} baseline; no confirmed single cause",
+            kind="inference",
+        )
 
     candidates = [CandidateCause(cause=detail, confidence=confidence, evidence=[source])]
+    supporting = [source] if releases and tx.get("failed", 0) > 0 else []
+    if tx.get("failed", 0) > 0:
+        supporting.append(Evidence(
+            source="transactions",
+            detail=f"{tx['failed']} failed transactions were observed.",
+            kind="fact",
+        ))
+    contradicting = [
+        Evidence(
+            source="system_events",
+            detail=f"The nearby event is marked unrelated: {event.get('description', '')}",
+            kind="fact",
+        )
+        for event in evidence.get("events", [])
+        if any(word in (event.get("description") or "").casefold() for word in ("decoy", "unrelated"))
+    ]
+    channels = list(evidence.get("complaints", {}).get("channels", {}))
+    systems = sorted({
+        event.get("component")
+        for event in evidence.get("events", [])
+        if event.get("component") and event.get("type") in {"release", "outage", "config_change"}
+    })
+    if dominant_switch:
+        systems.append(dominant_switch)
     propose_reversal = bool(tx.get("matched_complaints", 0) > 0 and tx.get("unreversed_failed", 0) > 0)
-    return Findings(
+    findings = Findings(
         headline=detail,
         candidate_causes=candidates,
-        affected_channels=list(evidence["complaints"]["channels"]),
+        affected_channels=channels,
+        affected_systems=sorted(set(systems)),
         affected_switch=dominant_switch,
         matched_transactions=tx.get("failed", 0),
         propose_reversal_request=propose_reversal,
-        recommended_action="Verify payment-path logs and assign an incident owner. No money movement is authorized.",
+        recommended_action=(
+            "Manually check the payment path and relevant system logs."
+            if detail == "unknown"
+            else "Verify payment-path logs and assign an incident owner. No money movement is authorized."
+        ),
+        likely_cause=detail,
+        confidence=0.5 if releases and tx.get("failed", 0) > 0 else 0.3,
+        supporting_evidence=supporting,
+        contradicting_evidence=contradicting,
+        recommended_owner="payments_operations",
+        recommended_next_step=(
+            "Manually check the payment path and relevant system logs."
+            if detail == "unknown"
+            else "Verify the affected payment path and correlated release logs."
+        ),
+        method="rules_fallback",
     )
+    return validate_findings(findings, evidence)
 
 
 def run_investigation_loop(evidence: dict, audit=None) -> tuple[Findings, str, list[dict]]:
@@ -64,6 +120,7 @@ def run_investigation_loop(evidence: dict, audit=None) -> tuple[Findings, str, l
         telemetry = {
             "telemetry": True,
             "source": source,
+            "method": "llm" if source == "llm" else "rules_fallback",
             "model": model_name,
             "prompt_version": prompt_id,
             "latency_ms": round((time.monotonic() - started) * 1000),
@@ -116,7 +173,7 @@ def run_investigation_loop(evidence: dict, audit=None) -> tuple[Findings, str, l
                 arguments = call.get("args", {})
                 if name == "submit_findings":
                     try:
-                        findings = Findings.model_validate(arguments)
+                        findings = validate_findings(Findings.model_validate(arguments), evidence)
                         entry = {"step": step + 1, "tool": "submit_findings", "input": arguments}
                         trace.append(entry)
                         if audit:
@@ -140,11 +197,14 @@ def run_investigation_loop(evidence: dict, audit=None) -> tuple[Findings, str, l
         return finish(fallback_findings(evidence), "rules")
 
     messages = [{"role": "user", "content": "Investigate the incident using the evidence tools, then call submit_findings.\n" + json.dumps(evidence, default=str)}]
-    client = anthropic.Anthropic(
-        api_key=settings.anthropic_api_key,
-        timeout=settings.anthropic_timeout_seconds,
-        max_retries=settings.anthropic_max_retries,
-    )
+    try:
+        client = anthropic.Anthropic(
+            api_key=settings.anthropic_api_key,
+            timeout=settings.anthropic_timeout_seconds,
+            max_retries=settings.anthropic_max_retries,
+        )
+    except Exception:
+        return finish(fallback_findings(evidence), "rules")
     for step in range(MAX_STEPS):
         try:
             response = client.messages.create(
@@ -168,7 +228,7 @@ def run_investigation_loop(evidence: dict, audit=None) -> tuple[Findings, str, l
         for call in calls:
             if call.name == "submit_findings":
                 try:
-                    findings = Findings.model_validate(call.input)
+                    findings = validate_findings(Findings.model_validate(call.input), evidence)
                     entry = {"step": step + 1, "tool": "submit_findings", "input": call.input}
                     trace.append(entry)
                     if audit:

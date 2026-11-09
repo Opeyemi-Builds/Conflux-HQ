@@ -56,6 +56,11 @@ export interface BackendComplaint {
   mentioned_amount?: number | string | null;
   mentioned_time?: string | null;
   classification_confidence?: number | null;
+  payment_category?: string | null;
+  classification_explanation?: string | null;
+  evidence_phrases?: string[];
+  review_status?: "auto" | "needs_review" | "reviewed";
+  routing_queue?: "standard" | "fraud_security" | "human_review";
   transaction_id?: string | null;
   incident_id?: string | null;
   occurred_at: string;

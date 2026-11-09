@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, Uuid
+from sqlalchemy import Boolean, JSON, DateTime, Float, ForeignKey, Integer, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, utcnow
@@ -29,6 +29,7 @@ class Incident(Base):
     likely_cause: Mapped[str | None] = mapped_column(Text)
     cause_confidence: Mapped[float | None] = mapped_column(Float)
     summary: Mapped[str | None] = mapped_column(Text)
+    investigation_findings: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     drafts: Mapped[list["Draft"]] = relationship(back_populates="incident", cascade="all, delete-orphan")
 
@@ -43,6 +44,7 @@ class Draft(Base):
     kind: Mapped[DraftKind] = mapped_column(enum_type(DraftKind))
     content: Mapped[str] = mapped_column(Text)
     status: Mapped[DraftStatus] = mapped_column(enum_type(DraftStatus), default=DraftStatus.PENDING)
+    needs_review: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     decided_by: Mapped[str | None] = mapped_column(String(64))
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

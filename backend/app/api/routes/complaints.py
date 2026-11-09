@@ -88,7 +88,8 @@ def ai_classify_complaint(complaint_id: uuid.UUID, user: Operator, db: DbSession
         severity=result.severity, sentiment=result.sentiment, language=result.language,
         summary=result.short_summary, mentioned_amount=result.mentioned_amount,
         mentioned_time=result.mentioned_time, confidence=result.confidence,
-        is_fraud=result.is_fraud))
+        is_fraud=result.is_fraud, payment_category=result.payment_category,
+        explanation=result.explanation, evidence_phrases=result.evidence_phrases))
     log_event(db, bank_id=user.bank_id, actor=str(user.id), action="complaint_classified",
               entity_type="complaint", entity_id=str(complaint.id),
               details={"issue_type": classified.issue_type.value, "source": source,

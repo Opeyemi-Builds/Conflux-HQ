@@ -136,6 +136,9 @@ function mapBackendComplaint(b: BackendComplaint): Complaint {
     amount: amt,
     isFraud: Boolean(b.is_fraud || issue === "fraud_scam"),
     confidence: b.classification_confidence,
+    paymentCategory: b.payment_category,
+    reviewStatus: b.review_status,
+    routingQueue: b.routing_queue,
     transactionId: b.transaction_id,
     incidentId: b.incident_id,
   };

@@ -114,6 +114,8 @@ def test_seed_analytics_and_idempotent_detection(demo):
     response = client.get("/api/v1/complaints", params={"issue_type": "failed_transfer", "limit": 50})
     assert response.status_code == 200, response.text
     assert any(row["transaction_id"] for row in response.json())
+    assert all("payment_category" in row and "classification_confidence" in row for row in response.json())
+    assert sum(bool(row["payment_category"]) for row in response.json()) >= 40
     assert client.get("/api/v1/synthetic/transactions", params={"status": "failed", "limit": 5}).status_code == 200
     assert len(client.get("/api/v1/synthetic/system-events").json()["items"]) == 2
 

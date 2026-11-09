@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 
+from app.ai.fallback import rules_classify
 from app.api.deps import DbSession, Operator
 from app.core.config import get_settings
 from app.core.privacy import mask_pii, pseudonymise
@@ -26,6 +27,7 @@ from app.models.enums import (
 )
 from app.services.audit import log_event
 from app.services.demo_auth import DEMO_BANK_ID
+from app.services.fraud import route_classification_to_fraud
 
 router = APIRouter(prefix="/synthetic", tags=["synthetic demo data"])
 
@@ -174,9 +176,14 @@ def seed_data(payload: SeedRequest, user: Operator, db: DbSession):
         amt_fmt = f"{int(amount_val):,}"
         time_label = occurred.strftime("%H:%M")
 
-        lang, raw_template, summary_template = rng.choice(_TEMPLATES[issue])
+        if spike and i - 960 < 12:
+            lang, raw_template, summary_template = _TEMPLATES[issue][0]
+        else:
+            lang, raw_template, summary_template = rng.choice(_TEMPLATES[issue])
         text = mask_pii(raw_template.format(amt=amt_fmt, time=time_label, region=region))
         summary = summary_template.format(amt=amt_fmt, time=time_label, region=region)
+        classification = rules_classify(text)
+        confidence = round(rng.uniform(0.82, 0.96), 2)
         channel = (
             rng.choice([Channel.IN_APP, Channel.X, Channel.CALL, Channel.INSTAGRAM])
             if spike
@@ -200,12 +207,21 @@ def seed_data(payload: SeedRequest, user: Operator, db: DbSession):
                 is_fraud=fraud,
                 mentioned_amount=amount_val if issue != IssueType.APP_LOGIN else None,
                 mentioned_time=f"since {time_label}",
-                classification_confidence=round(rng.uniform(0.82, 0.96), 2),
+                classification_confidence=confidence,
+                payment_category=classification.payment_category,
+                classification_explanation=classification.explanation,
+                evidence_phrases=classification.evidence_phrases,
+                review_status="needs_review" if fraud or confidence < get_settings().classification_review_threshold else "auto",
+                routing_queue="fraud_security" if fraud else "standard",
                 classified_at=detection_at,
                 transaction_id=txn.id if txn else None,
             )
         )
     db.add_all(complaints)
+    db.flush()
+    for complaint in complaints:
+        if complaint.is_fraud:
+            route_classification_to_fraud(db, complaint, actor="synthetic_seed")
     db.add_all([
         SystemEvent(
             bank_id=user.bank_id,
@@ -220,7 +236,7 @@ def seed_data(payload: SeedRequest, user: Operator, db: DbSession):
             event_type=EventType.MAINTENANCE,
             component="email-service",
             description="SYNTHETIC DECOY: unrelated email notification maintenance",
-            starts_at=release_at - timedelta(hours=6),
+            starts_at=release_at - timedelta(hours=4),
         ),
     ])
     log_event(

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Numeric, String, Text, Uuid
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, JSON, Numeric, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, utcnow
@@ -32,7 +32,15 @@ class Complaint(Base):
     mentioned_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
     mentioned_time: Mapped[str | None] = mapped_column(String(64))
     classification_confidence: Mapped[float | None] = mapped_column(Float)
+    payment_category: Mapped[str | None] = mapped_column(String(32), index=True)
+    classification_explanation: Mapped[str | None] = mapped_column(Text)
+    evidence_phrases: Mapped[list[str]] = mapped_column(JSON, default=list)
+    review_status: Mapped[str] = mapped_column(String(16), default="auto", server_default="auto")
+    routing_queue: Mapped[str] = mapped_column(String(24), default="standard", server_default="standard")
     classified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cluster_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("complaint_clusters.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     transaction_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("transactions.id"), index=True)
     incident_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("incidents.id"), index=True)
