@@ -37,8 +37,8 @@ export interface Complaint {
   text: string;
   summary?: string | null;
   issue: IssueType;
-  severity: Severity;
-  sentiment: Sentiment;
+  severity: Severity | null;
+  sentiment: Sentiment | null;
   language: string;
   region: string;
   ref: string;
@@ -55,14 +55,8 @@ export interface Complaint {
 
 export interface Cause {
   name: string;
-  confidence: number;
+  confidence: number | null;
   evidence: string;
-}
-
-export interface TraceStep {
-  tool: string;
-  args: string;
-  result: string;
 }
 
 export interface DraftItem {
@@ -97,7 +91,6 @@ export interface Incident {
   labels: string[];
   releaseLabel?: string;
   causes: Cause[];
-  trace: TraceStep[];
   summary: string;
   likelyCause?: string | null;
   customerDraft: string;

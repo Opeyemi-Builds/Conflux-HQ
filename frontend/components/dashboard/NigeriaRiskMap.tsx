@@ -16,23 +16,23 @@ import Link from "next/link";
 import { useDash } from "./Provider";
 import { ISSUE_LABEL } from "@/lib/types";
 
-export type RiskLevel = "all" | "critical" | "high" | "medium" | "low";
+export type RiskLevel = "all" | "critical" | "high" | "medium" | "low" | "unclassified";
 
 export interface GeoComplaint {
   id: string;
+  complaintId: string;
   city: string;
   state: string;
   zone: string;
   lat: number;
   lng: number;
-  risk: "critical" | "high" | "medium" | "low";
+  risk: "critical" | "high" | "medium" | "low" | "unclassified";
   issue: string;
   amount: string;
   channel: string;
   time: string;
   summary: string;
   incidentId?: string | null;
-  status: "active" | "investigating" | "quarantined";
 }
 
 // Projection: Longitude (2.4 -> 14.9), Latitude (4.0 -> 14.1) mapped to (1000 x 750)
@@ -114,9 +114,10 @@ export default function NigeriaRiskMap() {
 
   // Map live backend complaints directly onto Nigerian geographic coordinates
   const geoComplaintsData = useMemo<GeoComplaint[]>(() => {
-    return complaints.map((c, idx) => {
-      const regionKey = (c.region || "Lagos").toLowerCase().trim();
-      const hub = CITY_COORDS[regionKey] || CITY_COORDS.lagos;
+    return complaints.flatMap((c, idx) => {
+      const regionKey = (c.region || "").toLowerCase().trim();
+      const hub = CITY_COORDS[regionKey];
+      if (!hub) return [];
       const [u1, u2] = hashString(`${c.id}-${idx}`);
       const maxRadius = hub.state === "Lagos" ? 0.42 : hub.state === "FCT" ? 0.48 : 0.62;
       const radius = Math.sqrt(u1) * maxRadius;
@@ -126,19 +127,19 @@ export default function NigeriaRiskMap() {
 
       return {
         id: `GEO-${c.id}-${idx}`,
+        complaintId: c.id,
         city: hub.name,
         state: hub.state,
         zone: hub.zone,
         lat,
         lng,
-        risk: c.severity || "medium",
+        risk: c.severity || "unclassified",
         issue: ISSUE_LABEL[c.issue] || c.issue,
         amount: c.amount ? `₦${c.amount.toLocaleString()}` : "₦0",
         channel: c.channel,
         time: c.time,
         summary: c.text,
         incidentId: c.incidentId,
-        status: c.severity === "critical" ? "active" : c.severity === "high" ? "investigating" : "quarantined",
       };
     });
   }, [complaints]);
@@ -174,7 +175,7 @@ export default function NigeriaRiskMap() {
   const regionalStats = useMemo(() => {
     const byRegion = new Map<string, { count: number; exposure: number; topIssue: string }>();
     complaints.forEach((c) => {
-      const reg = c.region || "Lagos";
+      const reg = c.region === "—" ? "Unknown" : c.region || "Unknown";
       const cur = byRegion.get(reg) || { count: 0, exposure: 0, topIssue: ISSUE_LABEL[c.issue] || c.issue };
       cur.count += 1;
       cur.exposure += c.amount || 0;
@@ -183,11 +184,8 @@ export default function NigeriaRiskMap() {
     return byRegion;
   }, [complaints]);
 
-  const lagosCount = regionalStats.get("Lagos")?.count || 0;
-  const lagosPercentage =
-    complaints.length > 0 ? `${((lagosCount / complaints.length) * 100).toFixed(1)}%` : "0%";
-
-  const primaryIncidentHref = incidents[0] ? `/dashboard/incidents/${incidents[0].id}` : "/dashboard/complaints";
+  const leadingRegion = [...regionalStats].filter(([region]) => CITY_COORDS[region.toLowerCase().trim()])
+    .sort(([, first], [, second]) => second.count - first.count)[0];
 
   const getDotColor = (risk: GeoComplaint["risk"]) => {
     switch (risk) {
@@ -215,7 +213,7 @@ export default function NigeriaRiskMap() {
             Nigeria Complaint &amp; Financial Threat Map
           </h2>
           <p className="text-sm text-navy/60">
-            Real-time multi-channel incident density across Nigerian states + FCT ({geoComplaintsData.length} live backend records).
+            Approximate complaint locations across Nigeria ({geoComplaintsData.length} mapped records).
           </p>
         </div>
 
@@ -266,10 +264,10 @@ export default function NigeriaRiskMap() {
       {/* Top Executive KPI Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-navy/[0.06] border-b border-navy/[0.06] bg-white">
         <div className="p-4 px-6">
-          <p className="text-xs font-medium text-navy/50">Total Disputed Value on Map</p>
+          <p className="text-xs font-medium text-navy/50">Reported exposure</p>
           <div className="flex items-baseline gap-2 mt-1">
             <span className="text-2xl font-bold text-navy">{totalMoneyAtRisk}</span>
-            <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">Live Exposure</span>
+            <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">Reported amounts</span>
           </div>
         </div>
         <div className="p-4 px-6">
@@ -280,17 +278,17 @@ export default function NigeriaRiskMap() {
           </div>
         </div>
         <div className="p-4 px-6">
-          <p className="text-xs font-medium text-navy/50">Primary Epicenter</p>
+          <p className="text-xs font-medium text-navy/50">Highest mapped complaint volume</p>
           <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-2xl font-bold text-navy">Lagos ({lagosPercentage})</span>
-            <span className="text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">{lagosCount} cases</span>
+            <span className="text-2xl font-bold text-navy">{leadingRegion?.[0] ?? "—"}</span>
+            <span className="text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">{leadingRegion?.[1].count ?? 0} cases</span>
           </div>
         </div>
         <div className="p-4 px-6">
           <p className="text-xs font-medium text-navy/50">Active Incidents</p>
           <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-2xl font-bold text-emerald-700">{incidents.length} Open</span>
-            <span className="text-xs text-navy/50">AI Correlated</span>
+            <span className="text-2xl font-bold text-emerald-700">{incidents.filter((incident) => incident.status !== "resolved" && incident.rawStatus !== "dismissed").length} Open</span>
+
           </div>
         </div>
       </div>
@@ -395,7 +393,14 @@ export default function NigeriaRiskMap() {
               const color = getDotColor(point.risk);
 
               return (
-                <g key={point.id} onClick={() => setActivePoint(point)} className="cursor-pointer group">
+                <g key={point.id} role="button" tabIndex={0} aria-label={`Complaint in ${point.city}`}
+                  onClick={() => setActivePoint(point)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setActivePoint(point);
+                    }
+                  }} className="cursor-pointer group">
                   <circle
                     cx={x}
                     cy={y}
@@ -438,24 +443,23 @@ export default function NigeriaRiskMap() {
         <div className="absolute bottom-4 left-4 rounded-2xl bg-white/95 backdrop-blur-md border border-navy/10 p-3.5 shadow-lg text-xs space-y-2 max-w-[230px]">
           <div className="font-bold text-navy flex items-center justify-between">
             <span>RISK SEVERITY KEY</span>
-            <span className="text-[10px] font-mono text-navy/50">LIVE STREAM</span>
           </div>
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-[#DC2626] inline-block border border-white shadow-sm" />
-              <span className="text-navy/80 font-medium">Critical (Fraud / Unreversed)</span>
+              <span className="text-navy/80 font-medium">Critical</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-[#E8651A] inline-block border border-white shadow-sm" />
-              <span className="text-navy/80 font-medium">High (USSD / App Spike)</span>
+              <span className="text-navy/80 font-medium">High</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-[#8B5CF6] inline-block border border-white shadow-sm" />
-              <span className="text-navy/80 font-medium">Medium (POS / ATM Dispense)</span>
+              <span className="text-navy/80 font-medium">Medium</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-[#10B981] inline-block border border-white shadow-sm" />
-              <span className="text-navy/80 font-medium">Low (Fee / Login Inquiry)</span>
+              <span className="text-navy/80 font-medium">Low</span>
             </div>
           </div>
         </div>
@@ -498,6 +502,7 @@ export default function NigeriaRiskMap() {
               initial={{ opacity: 0, y: 15, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
+              onKeyDown={(event) => { if (event.key === "Escape") setActivePoint(null); }}
               className="absolute top-6 right-6 w-80 md:w-96 rounded-2xl bg-white/95 backdrop-blur-xl border border-navy/15 p-5 shadow-2xl z-20"
             >
               <div className="flex items-start justify-between mb-3">
@@ -546,10 +551,10 @@ export default function NigeriaRiskMap() {
 
               <div className="flex items-center gap-2">
                 <Link
-                  href={activePoint.incidentId ? `/dashboard/incidents/${activePoint.incidentId}` : primaryIncidentHref}
+                  href={activePoint.incidentId ? `/dashboard/incidents/${activePoint.incidentId}` : `/dashboard/complaints/${activePoint.complaintId}`}
                   className="flex-1 text-center py-2 px-3 rounded-xl bg-navy text-white text-xs font-semibold hover:bg-navy-600 transition-colors flex items-center justify-center gap-1.5"
                 >
-                  Inspect Incident <ExternalLink className="w-3.5 h-3.5" />
+                  {activePoint.incidentId ? "View attached incident" : "View complaint"} <ExternalLink className="w-3.5 h-3.5" />
                 </Link>
                 <Link
                   href="/dashboard/complaints"
@@ -590,12 +595,12 @@ export default function NigeriaRiskMap() {
         {showExecutiveBrief && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {[
-              { region: "Lagos", zone: "South-West Epicenter", badge: "Critical", tone: "red" },
-              { region: "Abuja", zone: "Federal Capital", badge: "High", tone: "orange" },
-              { region: "Kano", zone: "North-West Hub", badge: "High", tone: "navy" },
-              { region: "Port Harcourt", zone: "South-South Hub", badge: "High", tone: "red" },
+              { region: "Lagos", zone: "South-West Epicenter", badge: "Reported", tone: "red" },
+              { region: "Abuja", zone: "Federal Capital", badge: "Reported", tone: "orange" },
+              { region: "Kano", zone: "North-West Hub", badge: "Reported", tone: "navy" },
+              { region: "Port Harcourt", zone: "South-South Hub", badge: "Reported", tone: "red" },
             ].map((card) => {
-              const stat = regionalStats.get(card.region) || { count: 0, exposure: 0, topIssue: "Failed transfer" };
+              const stat = regionalStats.get(card.region) || { count: 0, exposure: 0, topIssue: "—" };
               const expM = `₦${(stat.exposure / 1_000_000).toFixed(2)}M`;
               return (
                 <div

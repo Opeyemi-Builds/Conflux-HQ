@@ -24,6 +24,7 @@ export default function Hero() {
   const [liveSummary, setLiveSummary] = useState<BackendAnalyticsSummary | null>(null);
 
   useEffect(() => {
+    if (!api.hasStoredToken()) return;
     let active = true;
     Promise.all([
       api.getIncidents().catch(() => [] as BackendIncident[]),
@@ -44,10 +45,8 @@ export default function Hero() {
     : "";
   const incTitle = liveIncident
     ? `${ISSUE_LABEL[(liveIncident.issue_type as IssueType) || "failed_transfer"] || liveIncident.issue_type} spike detected`
-    : "Live complaint telemetry connected";
-  const incSub = liveIncident?.likely_cause
-    ? `${liveIncident.likely_cause} · confidence ${Math.round((liveIncident.cause_confidence || 0.85) * 100)}%`
-    : "Monitoring real-time multi-channel banking feeds";
+    : "Complaint overview";
+  const incSub = liveIncident?.likely_cause ?? "Review complaint trends and incidents.";
   const complaintCount = liveIncident
     ? String(liveIncident.complaint_count)
     : liveSummary
@@ -61,7 +60,7 @@ export default function Hero() {
   const detectTimeStr =
     typeof liveSummary?.avg_time_to_detect_seconds === "number"
       ? `${Math.max(1, Math.round(liveSummary.avg_time_to_detect_seconds / 60))} min`
-      : "Live";
+      : "—";
 
   return (
     <section className="flex-1 px-6 pt-20 pb-6 flex items-end">
@@ -129,8 +128,7 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* floating live alert card */}
-        <motion.div
+        {(liveIncident || liveSummary) && <motion.div
           initial={{ opacity: 0, x: 40 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.9, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
@@ -143,10 +141,10 @@ export default function Hero() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-flux opacity-60" />
                   <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-flux" />
                 </span>
-                LIVE ALERT{detectedTime ? ` · ${detectedTime}` : ""}
+                {liveIncident ? "INCIDENT ALERT" : "BANK OVERVIEW"}{detectedTime ? ` · ${detectedTime}` : ""}
               </div>
               <span className="text-xs text-navy/40 group-hover:text-flux flex items-center gap-1 transition-colors font-medium">
-                Investigate <ArrowRight className="w-3 h-3" />
+                {liveIncident ? "View incident" : "View dashboard"} <ArrowRight className="w-3 h-3" />
               </span>
             </div>
             <div className="flex items-start gap-3 mb-4">
@@ -163,7 +161,7 @@ export default function Hero() {
             <div className="grid grid-cols-3 gap-2 text-center">
               {[
                 [complaintCount, "complaints"],
-                [growthStr, "vs baseline"],
+                [growthStr, liveIncident ? "vs baseline" : "incidents"],
                 [detectTimeStr, "to detect"],
               ].map(([v, l]) => (
                 <div key={l} className="rounded-xl bg-navy/5 py-2.5">
@@ -173,10 +171,10 @@ export default function Hero() {
               ))}
             </div>
             <div className="mt-3 flex items-center gap-1.5 text-xs text-navy/50">
-              <TrendingUp className="w-3.5 h-3.5" /> Live backend telemetry · Click to inspect trace
+              <TrendingUp className="w-3.5 h-3.5" /> Review in the operations console
             </div>
           </Link>
-        </motion.div>
+        </motion.div>}
       </div>
     </section>
   );

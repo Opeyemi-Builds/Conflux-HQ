@@ -207,3 +207,28 @@ Requirements:
 - [ ] X live versus recorded provenance is visible; reputation aggregates are real.
 - [ ] No browser secrets, invented cause confidence or false loss claims.
 - [ ] Lint, TypeScript, production build and browser/backend walkthrough pass, with any blocked steps recorded.
+
+## Implementation verification
+
+The frontend now uses server identity, explicit demo access, read-only dashboard
+polling, persisted complaint classification, and exact incident detail. The
+reconciliation and social monitoring routes use the existing backend contracts.
+Case panels use the queue response because the API has no case detail endpoint.
+Incident complaint excerpts cover the latest 500 bank complaints. The
+reconciliation timeline is fetched separately for the exact incident ID.
+
+An isolated SQLite smoke check called the backend route handlers directly and
+verified demo login, classification persistence, unresolved matching, duplicate
+case rejection, case updates, incident timeline associations, and independent
+proposal review. The HTTP regression test for independent administrator review
+is in `backend/tests/test_reconciliation.py`.
+
+ESLint, TypeScript, and all 53 backend tests passed. The backend suite ran
+with Windows loopback enabled. The default Turbopack build failed first on
+the Google Fonts fetch and then on a CSS worker crash. The Webpack build
+with a temporary font stub passed. The network-enabled Webpack build with
+the existing font compiled, type-checked, and generated all routes.
+
+Browser automation stopped when it could not verify the current Chrome URL.
+The full browser walkthrough and live X remain demo acceptance checks. A
+browser review with two authorized identities requires a separate test setup.

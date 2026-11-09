@@ -1,40 +1,69 @@
 "use client";
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
-  Check,
-  CheckCircle2,
   ClipboardCopy,
-  Loader2,
   MessageSquare,
   RefreshCw,
   Server,
   ShieldAlert,
-  X,
 } from "lucide-react";
-import { useDash } from "@/components/dashboard/Provider";
-import { Card, IssueBadge, PageHeader, Stat, Tag, Td, TableWrap, Th } from "@/components/dashboard/ui";
+import { buildIncidentFromBackend, useDash } from "@/components/dashboard/Provider";
+import { Card, IssueBadge, PageHeader, Stat, Tag } from "@/components/dashboard/ui";
+import { api, ApiError, type BackendIncident, type BackendDraft, type IncidentTimelineItem } from "@/lib/api";
 import { SpikeChart } from "@/components/dashboard/Charts";
 
 export default function IncidentPage({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = use(params);
-  const routeParams = useParams();
-  const id = resolvedParams?.id ?? (routeParams?.id as string);
-  const { decisions, decide, incidents, transactions, investigate, isBackendLive, isLoading } = useDash();
-  const [investigating, setInvestigating] = useState(false);
-  const [deciding, setDeciding] = useState(false);
+  const { id } = use(params);
+  return <IncidentDetail key={id} id={id} />;
+}
 
-  const inc = incidents.find((i) => i.id === id) || incidents[0];
+function IncidentDetail({ id }: { id: string }) {
+  const { decide, complaints, investigate, user } = useDash();
+  const [detail, setDetail] = useState<{ incident: BackendIncident; drafts: BackendDraft[]; timeline: IncidentTimelineItem[] } | null>(null);
+  const [error, setError] = useState("");
+  const [revision, setRevision] = useState(0);
+  const [pending, setPending] = useState(false);
+  const canWrite = user?.role !== "manager";
 
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) {
+        setError("Incident not found.");
+        return;
+      }
+      try {
+        const incident = await api.getIncident(id);
+        if (!active) return;
+        const [drafts, timeline] = await Promise.all([
+          canWrite ? api.getIncidentDrafts(id).catch(() => []) : [],
+          api.getIncidentTimeline(id).then((result) => result.timeline).catch(() => null),
+        ]);
+        if (!active) return;
+        setDetail({ incident, drafts, timeline: timeline ?? [] });
+        if (!timeline) setError("The reconciliation timeline could not be loaded.");
+      } catch (err) {
+        if (active) {
+          setDetail(null);
+          setError(err instanceof ApiError && err.status === 404 ? "Incident not found." : "Could not load the incident.");
+        }
+      }
+    }
+    void load();
+    return () => { active = false; };
+  }, [canWrite, id, revision]);
+
+  const inc = detail && buildIncidentFromBackend(detail.incident, detail.drafts, complaints);
   if (!inc) {
     return (
       <Card className="p-8 text-center">
         <p className="text-navy/60 mb-3">
-          {isLoading ? "Loading incident from FastAPI backend…" : "No active incident found in the database."}
+          {error || "Loading incident…"}
         </p>
+        {error && <button type="button" className="mr-4 underline" onClick={() => { setError(""); setRevision((value) => value + 1); }}>Retry</button>}
         <Link href="/dashboard" className="text-flux font-semibold underline">
           Back to overview
         </Link>
@@ -42,28 +71,16 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
     );
   }
 
-  const d = decisions[inc.id] ?? (inc.status === "resolved" ? "approved" : "pending");
-  const needsMoney =
-    inc.issue === "failed_transfer" ||
-    inc.issue === "double_debit" ||
-    inc.issue === "pos" ||
-    inc.issue === "card_atm";
-
-  const handleInvestigate = async () => {
-    setInvestigating(true);
+  const runAction = async (action: () => Promise<void>) => {
+    setPending(true);
+    setError("");
     try {
-      await investigate(inc.id);
+      await action();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "The action failed.");
     } finally {
-      setInvestigating(false);
-    }
-  };
-
-  const handleDecision = async (decision: "approved" | "rejected", draftId?: string) => {
-    setDeciding(true);
-    try {
-      await decide(inc.id, decision, draftId);
-    } finally {
-      setDeciding(false);
+      setRevision((value) => value + 1);
+      setPending(false);
     }
   };
 
@@ -83,17 +100,13 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
         right={
           <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={handleInvestigate}
-              disabled={investigating}
+              onClick={() => runAction(() => investigate(id))}
+              disabled={pending || !canWrite}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-navy/5 hover:bg-navy/10 text-navy text-xs font-semibold transition-colors disabled:opacity-50"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${investigating ? "animate-spin text-flux" : ""}`} />
-              {investigating ? "Running AI Investigator…" : "Re-run AI Investigation"}
+              <RefreshCw className={`w-3.5 h-3.5 ${pending ? "animate-spin text-flux" : ""}`} />
+              {pending ? "Investigation in progress…" : "Run investigation"}
             </button>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              {isBackendLive ? "Live Sync" : "Connecting"}
-            </span>
             <IssueBadge i={inc.issue} />
             <Tag
               tone={
@@ -112,9 +125,10 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
         }
       />
 
+      {error && <p role="alert" className="mb-4 text-red-700">{error}</p>}
       <Card className="p-6 mb-4 border-l-4 !border-l-flux">
         <p className="text-xs font-semibold tracking-wider text-flux mb-2">
-          AI ROOT-CAUSE SUMMARY
+          INCIDENT SUMMARY
         </p>
         <p className="text-lg md:text-xl text-navy leading-relaxed" style={{ letterSpacing: "-0.01em" }}>
           {inc.summary}
@@ -131,7 +145,7 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
       <Card className="p-6 mb-4">
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-semibold text-navy">Complaint Timeline</h3>
-          <span className="text-sm text-navy/50">Live database bucket distribution</span>
+          <span className="text-sm text-navy/50">Attached complaints from the latest 500 records · UTC</span>
         </div>
         <SpikeChart
           series={inc.series}
@@ -140,26 +154,26 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
         />
       </Card>
 
-      <div className="grid lg:grid-cols-2 gap-4 mb-4">
+      <div className="mb-4">
         <Card className="p-6">
-          <h3 className="font-semibold text-navy mb-4">Candidate causes (AI Ranked)</h3>
+          <h3 className="font-semibold text-navy mb-4">Likely cause</h3>
           {inc.causes.length === 0 ? (
-            <p className="text-navy/50 text-sm">No candidate causes ranked yet. Click Re-run AI Investigation.</p>
+            <p className="text-navy/50 text-sm">A likely cause has yet to be identified.</p>
           ) : (
             <div className="space-y-5">
               {inc.causes.map((c, i) => (
                 <div key={`${c.name}-${i}`}>
                   <div className="flex justify-between text-sm mb-1.5">
                     <span className="font-semibold text-navy">{c.name}</span>
-                    <span className={c.confidence < 50 ? "text-navy/50" : "text-flux font-semibold"}>
-                      {c.confidence}%{c.confidence < 50 ? " · low confidence" : ""}
+                    <span className={(c.confidence ?? 100) < 50 ? "text-navy/50" : "text-flux font-semibold"}>
+                      {c.confidence == null ? "Confidence unavailable" : `${c.confidence}%`}
                     </span>
                   </div>
                   <div className="h-2 rounded-full bg-navy/5 overflow-hidden">
                     <motion.div
                       className={`h-full rounded-full ${i === 0 ? "bg-flux" : "bg-navy/30"}`}
                       initial={{ width: 0 }}
-                      animate={{ width: `${c.confidence}%` }}
+                      animate={{ width: `${c.confidence ?? 0}%` }}
                       transition={{ duration: 0.9, delay: i * 0.12 }}
                     />
                   </div>
@@ -169,71 +183,24 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
             </div>
           )}
         </Card>
-        <Card className="p-6">
-          <h3 className="font-semibold text-navy mb-4">Agent investigation trace</h3>
-          {inc.trace.length === 0 ? (
-            <p className="text-navy/50 text-sm">No agent tool calls recorded for this incident yet.</p>
-          ) : (
-            <ol className="space-y-3">
-              {inc.trace.map((s, i) => (
-                <motion.li
-                  key={`${s.tool}-${i}`}
-                  initial={{ opacity: 0, x: -12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                  className="flex gap-3"
-                >
-                  <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                  <div className="min-w-0">
-                    <p className="font-mono text-sm text-navy">
-                      {s.tool}
-                      <span className="text-navy/40">({s.args})</span>
-                    </p>
-                    <p className="text-sm text-navy/60">{s.result}</p>
-                  </div>
-                </motion.li>
-              ))}
-            </ol>
-          )}
-        </Card>
       </div>
 
-      {needsMoney && transactions.length > 0 && (
-        <Card className="mb-4 overflow-hidden">
-          <div className="px-6 pt-5 pb-2 flex items-center justify-between">
-            <h3 className="font-semibold text-navy">Matched failed transactions from switch ledger</h3>
-            <Tag tone="flux">{transactions.length} failed records</Tag>
-          </div>
-          <TableWrap>
-            <thead className="bg-navy/[0.03]">
-              <tr>
-                <Th>Ref</Th>
-                <Th>Time</Th>
-                <Th>Channel</Th>
-                <Th>Amount</Th>
-                <Th>Status</Th>
-                <Th>Reversal</Th>
-                <Th>Switch</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-navy/5">
-              {transactions.slice(0, 10).map((t) => (
-                <tr key={t.id || t.ref} className="hover:bg-navy/[0.02]">
-                  <Td className="font-mono">{t.ref}</Td>
-                  <Td>{t.time}</Td>
-                  <Td>{t.channel}</Td>
-                  <Td className="font-semibold">{t.amount}</Td>
-                  <Td>
-                    <Tag tone="red">{t.status}</Tag>
-                  </Td>
-                  <Td>{t.reversal}</Td>
-                  <Td>{t.switch}</Td>
-                </tr>
-              ))}
-            </tbody>
-          </TableWrap>
-        </Card>
-      )}
+      <Card className="p-6 mb-4">
+        <h3 className="font-semibold text-navy">Reconciliation timeline</h3>
+        <p className="text-sm text-navy/60">System events are time correlations. Transaction entries are investigative candidates.</p>
+        {detail?.timeline.length ? (
+          <ol className="mt-3 space-y-2 text-sm">
+            {detail.timeline.map((entry) => (
+              <li key={`${entry.kind}-${entry.id}-${entry.at}`} className="break-all">
+                <time dateTime={entry.at}>{entry.at}</time> · {entry.kind.replaceAll("_", " ")} · {entry.id}
+                {[entry.status, entry.settlement_status, entry.association, entry.channel, entry.component, entry.event_type, entry.processor].filter(Boolean).map((value, index) => (
+                  <span key={index}> · {value?.replaceAll("_", " ")}</span>
+                ))}
+              </li>
+            ))}
+          </ol>
+        ) : <p className="mt-3 text-sm">No timeline entries available.</p>}
+      </Card>
 
       <div className="grid lg:grid-cols-2 gap-4 mb-4">
         <Card className="p-6">
@@ -311,45 +278,27 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
         </Card>
       )}
 
-      <Card className="p-5 sticky bottom-4 shadow-[0_20px_50px_-20px_rgba(20,35,63,.35)]">
-        <div className="flex flex-wrap items-center gap-4 justify-between">
-          <div>
-            <p className="font-semibold text-navy">
-              {d === "pending"
-                ? "Waiting for human approval"
-                : d === "approved"
-                ? "Approved and dispatched to outbox"
-                : "Rejected and logged"}
-            </p>
-            <p className="text-sm text-navy/55">
-              {needsMoney
-                ? "Approving dispatches the customer holding notice and IT ticket. Automated money movement is blocked by guardrail."
-                : "Nothing is sent until an authorized operator approves."}
-            </p>
+      <Card className="p-5">
+        <h3 className="font-semibold">Communication decisions</h3>
+        <p className="text-sm">Approval records the decision. Dispatch is processed separately.</p>
+        {[custDraftObj, itDraftObj].map((draft, index) => (
+          <div key={draft?.id ?? index} className="mt-3 flex flex-wrap items-center gap-3">
+            <span>{index === 0 ? "Customer message" : "IT ticket"}</span>
+            <Tag tone="navy">{draft?.status ?? "No draft"}</Tag>
+            {draft?.status === "pending" && canWrite && (["approved", "rejected"] as const).map((decision) => (
+              <button key={decision} type="button" disabled={pending} className="rounded-full border px-3 py-1 disabled:opacity-50"
+                onClick={() => runAction(async () => {
+                  const saved = await decide(draft.id, decision);
+                  setDetail((current) => current && ({
+                    ...current,
+                    drafts: current.drafts.map((item) => item.id === saved.id ? saved : item),
+                  }));
+                })}>
+                {decision === "approved" ? "Approve" : "Reject"}
+              </button>
+            ))}
           </div>
-          {d === "pending" ? (
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleDecision("rejected")}
-                disabled={deciding}
-                className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full border border-navy/15 text-navy font-semibold hover:bg-navy/5 disabled:opacity-40 transition-colors"
-              >
-                <X className="w-4 h-4" />
-                Reject
-              </button>
-              <button
-                onClick={() => handleDecision("approved")}
-                disabled={deciding}
-                className="inline-flex items-center gap-1.5 px-6 py-2.5 rounded-full bg-flux text-white font-semibold hover:bg-[#d25a14] disabled:opacity-40 transition-colors"
-              >
-                {deciding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                Approve &amp; log
-              </button>
-            </div>
-          ) : (
-            <Tag tone={d === "approved" ? "green" : "red"}>Decision recorded: {d}</Tag>
-          )}
-        </div>
+        ))}
       </Card>
 
       {inc.examples.length > 0 && (

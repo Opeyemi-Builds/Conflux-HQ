@@ -1,6 +1,7 @@
 "use client";
+import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   BarChart3,
@@ -11,6 +12,8 @@ import {
   LogOut,
   MapPin,
   RefreshCw,
+  Receipt,
+  Radio,
   ScrollText,
   ShieldAlert,
   Siren,
@@ -19,9 +22,9 @@ import LogoIcon from "@/components/LogoIcon";
 import { useDash } from "./Provider";
 
 export default function Shell({ children }: { children: React.ReactNode }) {
+  const [scanError, setScanError] = useState(false);
   const path = usePathname();
-  const router = useRouter();
-  const { detectNow, syncing, complaints, incidents, user, logoutUser, isBackendLive } = useDash();
+  const { detectNow, syncing, complaints, incidents, user, logoutUser, isBackendLive, isLoading, lastRefresh } = useDash();
 
   const primaryIncidentId = incidents[0]?.id || "latest";
   const nav = [
@@ -29,6 +32,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     { href: "/dashboard/risk-map", label: "Geo Risk Map", icon: MapPin },
     { href: `/dashboard/incidents/${primaryIncidentId}`, label: "Incidents", icon: Siren },
     { href: "/dashboard/complaints", label: "Complaints", icon: List },
+    { href: "/dashboard/reconciliation", label: "Reconciliation", icon: Receipt },
+    { href: "/dashboard/social", label: "Social monitoring", icon: Radio },
     { href: "/dashboard/security", label: "Security queue", icon: ShieldAlert },
     { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
     { href: "/dashboard/audit", label: "Audit log", icon: ScrollText },
@@ -37,11 +42,6 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const active = (h: string) =>
     h === "/dashboard" ? path === h : path.startsWith(h.split("/").slice(0, 3).join("/"));
   const fraudCount = complaints.filter((c) => c.isFraud || c.issue === "fraud_scam").length;
-
-  const handleSignOut = () => {
-    logoutUser();
-    router.push("/login");
-  };
 
   return (
     <div className="min-h-screen bg-cream lg:flex">
@@ -62,7 +62,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               </div>
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-white truncate">
-                  {user?.bank?.name || (isBackendLive ? "Authenticated Bank" : "Connecting…")}
+                  {user?.bank?.name || "Bank operations"}
                 </p>
                 <p className="text-[11px] text-white/55 truncate">
                   {user?.full_name || user?.email || "—"}
@@ -70,7 +70,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               </div>
             </div>
             <button
-              onClick={handleSignOut}
+              onClick={logoutUser}
               title="Sign out"
               className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors shrink-0"
             >
@@ -107,14 +107,6 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="rounded-xl bg-white/5 p-3 text-xs text-white/60 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                isBackendLive ? "bg-emerald-400 animate-pulse" : "bg-amber-400"
-              }`}
-            />
-            <span>{isBackendLive ? "Live API Connected" : "Connecting API…"}</span>
-          </div>
           <Link href="/login" className="text-flux-soft hover:underline font-medium">
             Account
           </Link>
@@ -129,13 +121,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2 text-xs text-navy/60">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                isBackendLive ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
-              }`}
-            />
             <span className="font-medium text-navy">
-              {user?.bank?.name ? `${user.bank.name} Operations Console` : "Live Operations Console"}
+              {user?.bank?.name ? `${user.bank.name} Operations Console` : "Operations Console"}
             </span>
             {user?.role && (
               <span className="hidden sm:inline-block rounded-full bg-navy/5 px-2.5 py-0.5 text-[11px] font-mono text-navy/65">
@@ -145,6 +132,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-3">
+            <button type="button" onClick={logoutUser} className="text-xs underline lg:hidden">Sign out</button>
             <Link
               href="/login"
               className="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium text-navy/75 bg-white hover:bg-navy/[0.03] rounded-full px-3.5 py-1.5 border border-navy/[0.08] transition-colors"
@@ -152,8 +140,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               {user?.email || "Switch Account"}
             </Link>
             <button
-              onClick={detectNow}
-              disabled={syncing}
+              onClick={async () => {
+                setScanError(false);
+                try { await detectNow(); } catch { setScanError(true); }
+              }}
+              disabled={syncing || user?.role === "manager"}
               className="inline-flex items-center gap-2 bg-navy text-white text-sm font-semibold px-4 py-2 rounded-full hover:bg-navy-600 disabled:opacity-80 transition-colors shadow-sm"
             >
               {syncing ? (
@@ -161,10 +152,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               ) : (
                 <RefreshCw className="w-4 h-4 text-flux" />
               )}
-              {syncing ? "Scanning Spikes…" : "Scan & Sync Live"}
+              {syncing ? "Scanning Spikes…" : "Run spike detection"}
             </button>
           </div>
         </header>
+        {scanError && <p role="alert" className="px-4 py-2 text-sm text-red-700">Spike detection failed. Try again.</p>}
         <div className="lg:hidden flex gap-1 overflow-x-auto px-4 py-2 bg-navy">
           {nav.map(({ href, label }) => (
             <Link
@@ -178,7 +170,14 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </div>
-        <main className="px-4 md:px-8 py-8 max-w-[88rem] mx-auto">{children}</main>
+        <main className="px-4 md:px-8 py-8 max-w-[88rem] mx-auto">
+          {!isLoading && !isBackendLive && (
+            <p role="status" className="mb-4 text-sm text-amber-800">
+              {lastRefresh ? "Dashboard figures may be out of date." : "Dashboard figures could not be loaded."}
+            </p>
+          )}
+          {children}
+        </main>
       </div>
     </div>
   );

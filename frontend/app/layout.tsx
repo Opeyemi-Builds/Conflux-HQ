@@ -12,7 +12,7 @@ const sans = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "Conflux HQ — Payment failures show up as complaints first",
   description:
-    "AI complaint intelligence for banks. Detect spikes, find the cause, draft the response. Humans approve anything that touches money.",
+    "Banking operations console for complaint monitoring, incident investigation, and payment reconciliation.",
   icons: {
     icon: [
       { url: "/icon.svg", type: "image/svg+xml" },

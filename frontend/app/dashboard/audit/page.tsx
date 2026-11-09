@@ -1,24 +1,20 @@
 "use client";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bot, Cpu, Radio, User } from "lucide-react";
+import { Cpu, User } from "lucide-react";
 import { useDash } from "@/components/dashboard/Provider";
 import { Card, PageHeader, Tag } from "@/components/dashboard/ui";
 
-const icon = { Human: User, Agent: Bot, Detector: Cpu, System: Cpu } as const;
+const icon = { Human: User, Agent: Cpu, Detector: Cpu, System: Cpu } as const;
 
 export default function Audit() {
-  const { audit, isBackendLive } = useDash();
+  const { audit } = useDash();
   return (
     <>
       <PageHeader
         title="Audit log"
-        sub="Every AI agent tool step, classification, spike alert, and human approval stored in the database."
+        sub="Review recorded classifications, incident alerts, and approval decisions."
         right={
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
-              <Radio className="w-3.5 h-3.5 animate-pulse text-emerald-600" />
-              {isBackendLive ? "Live Audit Ledger" : "Connecting…"}
-            </span>
             <Tag>{audit.length} entries</Tag>
           </div>
         }
@@ -45,9 +41,9 @@ export default function Audit() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm">
-                    <span className="font-semibold text-navy">{a.actor}</span>{" "}
+                    <span className="font-semibold text-navy">{a.actor === "Agent" ? "System" : a.actor}</span>{" "}
                     <span className="text-navy/50">·</span>{" "}
-                    <span className="font-mono text-navy/80">{a.action}</span>
+                    <span className="font-mono text-navy/80">{a.action === "agent_tool_call" ? "Investigation activity" : a.action.replaceAll("_", " ")}</span>
                   </p>
                   <p className="text-sm text-navy/60 mt-0.5 break-words">{a.detail}</p>
                 </div>

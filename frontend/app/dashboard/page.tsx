@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, ArrowRight, ShieldAlert, Timer, Radio } from "lucide-react";
+import { AlertTriangle, ArrowRight, ShieldAlert, Timer } from "lucide-react";
 import { useDash } from "@/components/dashboard/Provider";
 import { Card, IssueBadge, PageHeader, Stat, Tag } from "@/components/dashboard/ui";
 import { Bars, HourlyStack } from "@/components/dashboard/Charts";
@@ -14,10 +14,9 @@ export default function Overview() {
     transactionsAnalytics,
     hourlySeries,
     channelSplit,
-    isBackendLive,
   } = useDash();
 
-  const live = incidents.slice().sort((a, b) => b.priority - a.priority);
+  const live = incidents.filter((incident) => incident.status !== "resolved" && incident.rawStatus !== "dismissed").sort((a, b) => b.priority - a.priority);
   const topIncident = live[0] || null;
 
   const complaintsCount =
@@ -68,7 +67,7 @@ export default function Overview() {
                   <span className="animate-ping absolute h-full w-full rounded-full bg-white opacity-70" />
                   <span className="relative h-2 w-2 rounded-full bg-white" />
                 </span>
-                LIVE INCIDENT DETECTED · {topIncident.detectedAt}
+                PRIORITY INCIDENT · {topIncident.detectedAt}
               </p>
               <h2 className="text-2xl md:text-3xl font-semibold mt-1" style={{ letterSpacing: "-0.03em" }}>
                 {topIncident.title}
@@ -84,32 +83,12 @@ export default function Overview() {
               Open incident <ArrowRight className="w-4 h-4" />
             </Link>
           </motion.div>
-        ) : (
-          <motion.div
-            key="ok"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="rounded-3xl bg-white border border-navy/[0.06] p-6 mb-6 flex items-center gap-4"
-          >
-            <span className="w-3 h-3 rounded-full bg-emerald-500" />
-            <p className="font-semibold text-navy">All systems normal.</p>
-            <p className="text-navy/55">
-              No active spikes detected across monitored banking channels.
-            </p>
-          </motion.div>
-        )}
+        ) : null}
       </AnimatePresence>
 
       <PageHeader
         title="Live overview"
-        sub="Complaints from every channel, classified and watched for systemic spikes in real time."
-        right={
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
-            <Radio className="w-3.5 h-3.5 animate-pulse text-emerald-600" />
-            {isBackendLive ? "Live API Stream" : "Connecting API…"}
-          </div>
-        }
+        sub="Monitor complaint trends and prioritize incidents across your bank."
       />
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
