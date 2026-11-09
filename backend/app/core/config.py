@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     # Supabase Session pooler; replace placeholders in .env before connecting.
     # SQLite is an explicit offline/test option, never a silent fallback.
     database_url: str = "postgresql+psycopg://postgres.PROJECT_REF:DB_PASSWORD@POOLER_HOST:5432/postgres?sslmode=require"
+    # Credential hashing secret for bank ingestion connectors
+    ingestion_hash_secret: str = "conflux-default-ingestion-hash-secret-min-32-chars"
+    # Safeguard for Forge: disable live external social network calls when false
+    social_live_enabled: bool = True
+
     demo_mode: bool = True
     demo_username: str = "Zymic Bank"
     demo_password: str = "123"

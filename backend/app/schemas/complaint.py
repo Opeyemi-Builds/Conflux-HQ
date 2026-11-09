@@ -12,6 +12,7 @@ class ComplaintCreate(BaseModel):
     text: str = Field(min_length=1, max_length=5000)
     occurred_at: datetime | None = None
     customer_ref: str | None = None
+    payment_reference: str | None = None
     region: str | None = None
     language: str | None = None
     # Optional pre-labels (simulator or tests); the AI classifier normally fills these.
@@ -54,6 +55,7 @@ class ComplaintRead(BaseModel):
     mentioned_amount: Decimal | None
     mentioned_time: str | None
     classification_confidence: float | None
+    payment_reference: str | None = None
     transaction_id: uuid.UUID | None
     incident_id: uuid.UUID | None
 
