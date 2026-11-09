@@ -1,0 +1,154 @@
+[
+  {
+    "scenario": "forge_timeout_reversal_trigger",
+    "expect_status": 202,
+    "payload": {
+      "source_system": "zendesk_sim",
+      "external_id": "TCK-SIM-20261109-001",
+      "channel": "in_app",
+      "occurred_at": "2026-11-09T09:45:00+00:00",
+      "text": "My transfer of \u20a625,000.02 to Chukwuemeka Nwosu (GTBank 0123987001) failed after debit. App showed network error but I was debited. Please reverse my money.",
+      "customer_ref": "crm-cust-9901",
+      "payment_reference": "TRF-20261109-0002",
+      "amount": "25000.02",
+      "currency": "NGN",
+      "region": "Lagos",
+      "language": "en",
+      "synthetic": true
+    },
+    "deliver_after_seconds": 0
+  },
+  {
+    "scenario": "forge_webhook_withheld_trigger",
+    "expect_status": 202,
+    "payload": {
+      "source_system": "crm_call_center",
+      "external_id": "TCK-SIM-20261109-002",
+      "channel": "call_center",
+      "occurred_at": "2026-11-09T09:40:00+00:00",
+      "text": "Customer called from Abuja: Transferred \u20a618,000.05 to Tamunotonye Briggs (UBA 0123987004). Money left account but beneficiary hasn't received value. Ref TRF-20261109-0005.",
+      "customer_ref": "crm-cust-9902",
+      "payment_reference": "TRF-20261109-0005",
+      "amount": "18000.05",
+      "currency": "NGN",
+      "region": "Abuja",
+      "language": "en",
+      "synthetic": true
+    },
+    "deliver_after_seconds": 2
+  },
+  {
+    "scenario": "call_center_double_debit",
+    "expect_status": 202,
+    "payload": {
+      "source_system": "crm_call_center",
+      "external_id": "TCK-SIM-20261109-003",
+      "channel": "call",
+      "occurred_at": "2026-11-09T09:25:00+00:00",
+      "text": "Caller complains of duplicate debit of \u20a612,500.00 at Kano Agro Hub POS. Account was charged twice for a single transaction. Contact phone 08031234567.",
+      "customer_ref": "crm-cust-9903",
+      "payment_reference": "POS-20261109-1081",
+      "amount": "12500.00",
+      "currency": "NGN",
+      "region": "Kano",
+      "language": "en",
+      "synthetic": true
+    },
+    "deliver_after_seconds": 5
+  },
+  {
+    "scenario": "in_app_pidgin_failed_transfer",
+    "expect_status": 202,
+    "payload": {
+      "source_system": "zendesk_sim",
+      "external_id": "TCK-SIM-20261109-004",
+      "channel": "in_app",
+      "occurred_at": "2026-11-09T09:50:00+00:00",
+      "text": "Abeg I send \u20a650,000 to my mama account for morning since 8am, money don comot for my balance but mama never see alert. Wetin dey happen? Ref na TRF-20261109-0020.",
+      "customer_ref": "crm-cust-9904",
+      "payment_reference": "TRF-20261109-0020",
+      "amount": "50000.00",
+      "currency": "NGN",
+      "region": "Port Harcourt",
+      "language": "pcm",
+      "synthetic": true
+    },
+    "deliver_after_seconds": 8
+  },
+  {
+    "scenario": "fraud_phishing_report",
+    "expect_status": 202,
+    "payload": {
+      "source_system": "zendesk_sim",
+      "external_id": "TCK-SIM-20261109-005",
+      "channel": "in_app",
+      "occurred_at": "2026-11-09T09:15:00+00:00",
+      "text": "Someone called claiming to be from Bank support asking for my debit card OTP and PIN. I didn't give them but want my account protected.",
+      "customer_ref": "crm-cust-9905",
+      "payment_reference": null,
+      "amount": null,
+      "currency": null,
+      "region": "Ibadan",
+      "language": "en",
+      "synthetic": true
+    },
+    "deliver_after_seconds": 12
+  },
+  {
+    "scenario": "identical_replay",
+    "expect_status": 200,
+    "payload": {
+      "source_system": "zendesk_sim",
+      "external_id": "TCK-SIM-20261109-001",
+      "channel": "in_app",
+      "occurred_at": "2026-11-09T09:45:00+00:00",
+      "text": "My transfer of \u20a625,000.02 to Chukwuemeka Nwosu (GTBank 0123987001) failed after debit. App showed network error but I was debited. Please reverse my money.",
+      "customer_ref": "crm-cust-9901",
+      "payment_reference": "TRF-20261109-0002",
+      "amount": "25000.02",
+      "currency": "NGN",
+      "region": "Lagos",
+      "language": "en",
+      "synthetic": true
+    },
+    "deliver_after_seconds": 15
+  },
+  {
+    "scenario": "conflicting_replay_drift",
+    "expect_status": 409,
+    "payload": {
+      "source_system": "zendesk_sim",
+      "external_id": "TCK-SIM-20261109-001",
+      "channel": "in_app",
+      "occurred_at": "2026-11-09T09:45:00+00:00",
+      "text": "MODIFIED TEXT: Customer changed statement, claims \u20a640,000 was debited instead.",
+      "customer_ref": "crm-cust-9901",
+      "payment_reference": "TRF-20261109-0002",
+      "amount": "40000.00",
+      "currency": "NGN",
+      "region": "Lagos",
+      "language": "en",
+      "synthetic": true
+    },
+    "deliver_after_seconds": 18
+  },
+  {
+    "scenario": "late_arrival_ticket",
+    "expect_status": 202,
+    "payload": {
+      "source_system": "zendesk_sim",
+      "external_id": "TCK-SIM-20261109-008",
+      "channel": "in_app",
+      "occurred_at": "2026-11-09T04:00:00+00:00",
+      "text": "Delayed logging: yesterday night transfer of \u20a630,000.00 through USSD *901# timed out but customer was debited.",
+      "customer_ref": "crm-cust-9908",
+      "payment_reference": "USSD-20261109-8812",
+      "amount": "30000.00",
+      "currency": "NGN",
+      "region": "Enugu",
+      "language": "en",
+      "synthetic": true
+    },
+    "deliver_after_seconds": 22
+  }
+]
