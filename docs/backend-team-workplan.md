@@ -1,506 +1,115 @@
-# Conflux HQ Backend Team Workplan
+# Conflux backend sprint — four-person ownership
 
-## Objective
+Audience: dev_id, Andrew, Adfola and Opeyemi.
 
-Complete the backend for the hackathon around one core promise:
-
-> Conflux HQ helps African financial institutions detect, investigate and safely resolve payment failures by connecting customer reports, social signals, transaction records and system events.
-
-This plan divides the remaining backend work among three people. Person 1 owns the largest workstream because they have the most implementation credits and will coordinate the core payment-intelligence flow.
-
-## Shared rules
-
-- Work from the latest feature branch before starting.
-- Keep all changes tenant-scoped by `bank_id`.
-- Never expose Supabase service-role keys, X bearer tokens or social adapter credentials.
-- Never execute refunds, reversals or money movement automatically.
-- Use human approval for financial or public-response actions.
-- Mask personal information before persistence or logging.
-- Add tests for every endpoint and important business rule.
-- Use migrations for every database schema change.
-- Keep synthetic fixtures clearly marked as synthetic.
-- Push completed commits to the assigned feature branch and open a pull request for review.
-- Do not mix unrelated changes into another person’s workstream.
-
-## Person 1: Payment intelligence, reconciliation and orchestration
-
-### Scope
-
-Person 1 owns the largest and most central workstream. They connect complaints, social posts, transactions, incidents, reconciliation and worker processing into one payment-incident workflow.
-
-### Features
+Sprint: backend on 9 November 2026; frontend rebuild on 10 November 2026. These are targets, not a claim that every production integration can be completed in one day.
 
-#### Payment exception model
+This replaces the earlier three-person workplan. Existing implementation is a starting point: inspect and reuse it instead of rebuilding completed reconciliation, social, queue or authentication features.
 
-Add a bank-scoped payment exception or reconciliation case model with:
+## Product decision
 
-- Complaint ID.
-- Transaction ID.
-- Bank ID.
-- Customer reference hash.
-- Exception type.
-- Amount.
-- Currency.
-- Payment channel.
-- Processor or switch.
-- Transaction reference.
-- Settlement status.
-- Match confidence.
-- Evidence summary.
-- Owner.
-- Priority.
-- Current status.
-- Created, updated and resolved timestamps.
-- Human approval fields.
-
-Recommended exception types:
+Conflux unifies bank complaints and social signals, detects shared payment problems, correlates available payment evidence, supports investigation and tracks corrective actions to reduce recurrence. It is not a payment gateway or an autonomous root-cause oracle.
 
-- Debited but not credited.
-- Failed transfer.
-- Pending beyond expected time.
-- Reversed but not refunded.
-- Duplicate debit.
-- Duplicate settlement.
-- Processor timeout.
-- Switch outage.
-- Unknown settlement status.
-- Fraud-related payment dispute.
+Core flow:
 
-Recommended lifecycle:
+Complaint ingestion → privacy processing → classification → pattern/incident detection → payment evidence correlation → investigation brief → assigned corrective action → post-change validation.
 
-```text
-reported -> transaction_matched -> settlement_checked -> reconciliation_pending -> approval_required -> resolved
-```
+## Assignments
 
-#### Settlement and transaction matching
+| Person | Backend ownership today | Task file |
+|---|---|---|
+| dev_id | Bank complaint ingestion, source provenance and existing social intake integration | [dev_id](team/dev-id-backend.md) |
+| Andrew | Huawei MaaS classification and grounded investigation services | [Andrew](team/andrew-backend.md) |
+| Adfola | XtraDot payment evidence connector and signed webhook receiver | [Adfola](team/adfola-backend.md) |
+| Opeyemi | Incident/evidence API, corrective-action lifecycle, shared integration and Forge packaging | [Opeyemi](team/opeyemi-backend.md) |
 
-Implement matching between complaints and transactions using:
+## Scope boundaries
 
-- Exact transaction reference.
-- Customer reference hash.
-- Amount.
-- Time window.
-- Channel.
-- Processor.
-- Sender or recipient reference where permitted.
-
-Return a match confidence value and explain the matching evidence.
-
-Support these match results:
-
-- Exact match.
-- Strong match.
-- Possible match.
-- No match.
-- Conflicting matches.
-
-#### Incident command center API
-
-Extend incident responses with:
-
-- Affected customers.
-- Affected channels.
-- Failed, pending, reversed and successful transaction counts.
-- Linked payment exceptions.
-- Linked social complaint count.
-- Complaint growth rate.
-- First detected time.
-- Estimated unverified exposure.
-- Linked processor, switch and system events.
-- Current owner.
-- Recommended next action.
-
-Add an evidence timeline endpoint for each incident.
-
-#### Worker orchestration
-
-Extend the worker queue to process:
-
-- Transaction matching.
-- Reconciliation case creation.
-- Incident enrichment.
-- Social trend evaluation.
-- Reconciliation reminders.
-- Approval dispatch.
-- Incident resolution updates.
-
-Keep jobs idempotent, retryable and tenant-scoped. Add dead-letter tests.
-
-#### Safe financial action workflow
-
-Create proposal records for:
-
-- Reversal request.
-- Refund request.
-- Customer compensation recommendation.
-- Public communication approval.
-
-Proposals must remain pending until a human approves them. The backend must not call a bank or payment processor to move money in this prototype.
-
-### Suggested files
-
-- `backend/app/models/payment_exception.py`
-- `backend/app/models/settlement.py`
-- `backend/app/schemas/reconciliation.py`
-- `backend/app/services/transaction_matching.py`
-- `backend/app/services/reconciliation.py`
-- `backend/app/api/routes/reconciliation.py`
-- `backend/app/api/routes/incidents.py`
-- `backend/app/services/worker.py`
-- `backend/alembic/versions/0007_payment_exceptions.py`
-- `backend/tests/test_reconciliation.py`
-- `backend/tests/test_transaction_matching.py`
-
-### Acceptance criteria
-
-- A complaint can be matched to a transaction with a confidence score.
-- A debited-but-not-credited case appears in a reconciliation queue.
-- Every case is bank-scoped.
-- A human can approve or reject a proposed action.
-- No endpoint moves money automatically.
-- Incident detail includes transaction, social and system evidence.
-- Tests cover exact matches, ambiguous matches, no matches, duplicate cases and tenant isolation.
-
-## Person 2: AI analysis, clustering, fraud and reputation intelligence
-
-### Scope
-
-Person 2 owns deeper content intelligence. Their work should make the system explain what customers are reporting, identify related complaints and prioritize fraud or reputation risk.
-
-### Features
-
-#### Payment-specific classification
-
-Expand classification categories to include:
-
-- Debited but not credited.
-- Failed transfer.
-- Pending transfer.
-- Delayed settlement.
-- Reversed but not refunded.
-- Double debit.
-- Duplicate payment.
-- Card or ATM failure.
-- Point-of-sale failure.
-- Processor timeout.
-- Switch outage.
-- Fees.
-- Fraud or scam.
-- Account takeover.
-- Unknown payment issue.
-
-Return:
-
-- Category.
-- Severity.
-- Sentiment.
-- Language.
-- Mentioned amount.
-- Mentioned time.
-- Fraud status.
-- Confidence.
-- Short explanation.
-- Evidence phrases from the masked content.
-
-#### Complaint clustering
-
-Group similar complaints by issue and meaning. Each cluster should expose:
-
-- Cluster ID.
-- Bank ID.
-- Label.
-- Complaint count.
-- Growth rate.
-- First and last seen time.
-- Affected channels.
-- Affected regions.
-- Fraud count.
-- Sample masked complaints.
-- Related incident ID.
-
-A deterministic similarity fallback is required when the AI provider is unavailable.
-
-#### Root-cause analysis improvements
-
-Improve investigation output with:
-
-- Likely cause.
-- Confidence.
-- Supporting evidence.
-- Contradicting evidence.
-- Affected systems.
-- Affected channels.
-- Recommended owner.
-- Recommended next step.
-- Clear distinction between fact, inference and recommendation.
-
-The investigation agent must remain read-only.
-
-#### Fraud and security queue
-
-Add fraud-specific routing for:
-
-- OTP requests.
-- Fake bank agents.
-- Phishing links.
-- SIM-swap indicators.
-- Unauthorized transfers.
-- Account takeover claims.
-- Repeated fraud reports.
-- Suspicious transaction clusters.
-
-Add bank-scoped endpoints for listing and prioritizing fraud cases.
-
-#### Reputation intelligence
-
-Extend existing social signals with:
-
-- High-reach negative posts.
-- Scam allegations.
-- Regulatory escalation.
-- Coordinated complaint patterns.
-- Repeated complaint themes.
-- Public escalation urgency.
-- Recommended response priority.
-
-Use careful labels such as `reputation_signal`, `triage_indicator` and `requires_review`. Do not make legal or defamatory conclusions.
-
-#### AI safety and evaluation
-
-Add or verify:
-
-- Strict structured output validation.
-- Confidence thresholds.
-- Human review for low-confidence outputs.
-- Prompt-injection resistance for post content.
-- AI audit metadata.
-- Provider failure fallback.
-- Golden evaluation coverage.
-- Tests for multilingual and adversarial content.
-
-### Suggested files
-
-- `backend/app/ai/schemas.py`
-- `backend/app/ai/classifier.py`
-- `backend/app/ai/fallback.py`
-- `backend/app/ai/guardrails.py`
-- `backend/app/ai/clustering.py`
-- `backend/app/ai/reputation.py`
-- `backend/app/api/routes/ai.py`
-- `backend/app/api/routes/fraud.py`
-- `backend/app/models/complaint_cluster.py`
-- `backend/app/models/fraud_case.py`
-- `backend/alembic/versions/0008_ai_intelligence.py`
-- `backend/tests/test_ai.py`
-- `backend/tests/test_clustering.py`
-- `backend/tests/test_fraud.py`
-
-### Acceptance criteria
-
-- A masked post receives a payment-specific category and confidence.
-- Similar complaints form a visible cluster.
-- Fraud complaints enter a separate security queue.
-- Root-cause findings distinguish evidence from inference.
-- AI failure falls back safely without dropping the complaint.
-- Low-confidence outputs remain reviewable rather than being treated as facts.
-- No AI tool can execute money movement.
-- Tests cover prompt injection, malformed output, multilingual text and fraud routing.
-
-## Person 3: Social ingestion, analytics, audit and operational readiness
-
-### Scope
-
-Person 3 owns external signal quality, trend reporting, platform integration and operational visibility. They should make the payment incident workflow easy to monitor and demonstrate.
-
-### Features
-
-#### X and social ingestion
-
-Complete and stabilize:
-
-- X Recent Search.
-- X Filtered Stream rule synchronization.
-- Handles and hashtags.
-- Native X payload parsing.
-- Social adapter authentication.
-- Multi-bank fan-out.
-- Deduplication.
-- Replay mode.
-- Public engagement metrics.
-- Post source URLs.
-- Privacy-safe author references.
-
-Add validation for:
-
-- Unsupported platform payloads.
-- Invalid source URLs.
-- Missing post IDs.
-- Oversized content.
-- Duplicate delivery.
-- Malformed metrics.
-
-#### Social trend analytics
-
-Extend `/api/v1/analytics/social` with:
-
-- Complaint volume velocity.
-- Unique authors.
-- Engagement growth.
-- High-reach posts.
-- Reply and repost counts.
-- First-seen time.
-- Top aliases.
-- Top issue categories.
-- Geographic concentration.
-- Channel concentration.
-- Emerging, growing and viral labels.
-
-Keep all results bank-scoped for operator-facing routes.
-
-#### Incident timeline and reporting
-
-Add operational reporting for:
-
-- Time from post receipt to classification.
-- Time from first complaint to detection.
-- Time from detection to investigation.
-- Time from investigation to approval.
-- Number of affected customers.
-- Number of unresolved exceptions.
-- Number of high-risk posts.
-- Number of fraud cases.
-
-#### Audit and observability
-
-Improve audit entries with:
-
-- Correlation ID.
-- Request ID.
-- Job ID.
-- Source platform.
-- Actor type.
-- Model and prompt version.
-- Input and output token counts where applicable.
-- Processing latency.
-- Failure reason.
-
-Add health checks for:
-
-- Database.
-- Worker queue.
-- X credentials.
-- AI provider configuration.
-- Migration status.
-
-#### Demo operations
-
-Provide a reliable demo mode that can:
-
-- Load the synthetic scenario.
-- Replay recorded X posts.
-- Drain workers.
-- Detect incidents.
-- Produce investigation results.
-- Generate drafts.
-- Show audit records.
-
-Document the exact commands and environment variables for the presentation.
-
-### Suggested files
-
-- `backend/app/adapters/x_adapter.py`
-- `backend/app/services/social_intake.py`
-- `backend/app/api/routes/social.py`
-- `backend/app/api/routes/analytics.py`
-- `backend/app/services/audit.py`
-- `backend/app/api/routes/health.py`
-- `backend/app/api/routes/jobs.py`
-- `backend/app/models/audit_log.py`
-- `backend/tests/test_x_adapter.py`
-- `backend/tests/test_social.py`
-- `backend/tests/test_analytics.py`
-- `docs/social-scanner-handoff.md`
-
-### Acceptance criteria
-
-- A post containing a configured hashtag reaches the correct bank.
-- Full post content is available to downstream analysis after masking.
-- Engagement and trend metrics are visible through an API.
-- Replay mode reproduces the same demo flow without live credentials.
-- Operational endpoints expose failures clearly.
-- Audit records connect ingestion, jobs, AI analysis and approvals.
-- Tests cover X request shapes, hashtags, replay, deduplication and trend calculations.
-
-## Shared integration contract
-
-Person 1 depends on:
-
-- Complaint IDs and transaction IDs from existing ingestion.
-- Social receipts and incident IDs.
-- AI classifications from Person 2.
-- Worker jobs from Person 3.
-
-Person 2 depends on:
-
-- Full masked complaint text.
-- Payment and transaction evidence from Person 1.
-- Social engagement and reputation fields from Person 3.
-
-Person 3 depends on:
-
-- Stable complaint and incident schemas.
-- Stable bank-scoped authentication.
-- Worker job types and idempotency behavior.
-
-Before merging, each person must run:
-
-```sh
-cd backend
-python -m pytest -q
-python -m alembic check
-```
-
-If the full environment is unavailable, they must at minimum run Python compilation for changed files and the focused test modules.
-
-## Suggested delivery order
-
-### First delivery
-
-- Person 1: payment exception model and transaction matching.
-- Person 2: payment-specific classification and fraud routing.
-- Person 3: hashtag ingestion, X metrics and social trend endpoint.
-
-### Second delivery
-
-- Person 1: reconciliation lifecycle and incident evidence timeline.
-- Person 2: complaint clustering and grounded root-cause output.
-- Person 3: audit correlation, health checks and demo replay commands.
-
-### Final integration
-
-- Run the synthetic payment incident scenario.
-- Replay or pull X posts.
-- Drain classification and matching jobs.
-- Detect and investigate the incident.
-- Confirm the reconciliation queue is populated.
-- Review fraud and reputation queues.
-- Approve a safe draft.
-- Verify audit history.
-- Run the complete backend test suite.
-
-## Definition of done
-
-The backend is ready for the hackathon when one end-to-end scenario proves that:
-
-1. A customer reports a payment failure.
-2. The bank is identified from a name, handle or hashtag.
-3. Personal information is masked.
-4. The complaint is classified and clustered.
-5. The related transaction is matched or marked unresolved.
-6. A reconciliation exception is created.
-7. Transaction and system evidence are linked.
-8. A payment incident is detected.
-9. Fraud and reputation risk are prioritized.
-10. A human-reviewable response and operational action are drafted.
-11. No money moves automatically.
-12. Every step is auditable and tenant-scoped.
+- No frontend implementation today. Tomorrow rebuild around complaint → incident → evidence → corrective action, not unrelated lending or geographic-risk features.
+- No live NIBSS integration. XtraDot is synthetic and does not connect to NIBSS.
+- The supplied catalogue has no complaint API. Demonstrate bank-side delivery using a labelled synthetic support-ticket sender into Conflux's ingestion endpoint.
+- Payment evidence shows status, not necessarily technical root cause or beneficiary-ledger proof.
+- A timeout is an unknown outcome: query/requery, never resubmit a transfer.
+- The `.05` test trigger is an AMOUNT ending in `.05`, not a reference suffix.
+- Social corroboration may increase priority but does not prove an allegation or justify an automatic critical severity. Deduplicate reposts and distinguish unique customers where identity is reliable.
+- Corrective actions require bank confirmation. Lower complaint counts alone do not prove a permanent fix; account for payment volume and source-feed health.
+- Existing refund/reversal proposals remain review-only. No money movement is added to operational investigation.
+
+## Shared file ownership
+
+Opeyemi owns edits to shared registration/configuration: API router, main app, settings, dependency manifests, worker dispatch, model exports, enum changes and migration integration. Others supply exact integration patches or coordinate a short handoff before editing these files. Do not replace those files wholesale.
+
+Each developer owns tests for their module. Opeyemi owns end-to-end orchestration, not writing everyone else's tests.
+
+Opeyemi assigns unique Alembic revision IDs after checking the current head. Never reuse `0008` or create concurrent uncoordinated heads. Each model owner supplies their migration and downgrade; Opeyemi integrates the chain.
+
+Suggested separate branches: `feat/bank-complaint-ingestion`, `feat/maas-investigation`, `feat/xtradot-evidence`, `feat/incident-remediation`. Do not commit kubeconfigs or secrets. Do not commit or push another person's changes.
+
+## Proposed contracts — freeze together before implementation
+
+These are TARGET contracts, not claims that endpoints already exist. Export actual OpenAPI after integration.
+
+### Bank complaint intake
+
+`POST /api/v1/ingestion/complaints` with a bank-bound service credential, not the Forge gateway key.
+
+Required: `source_system`, `external_id`, `channel`, `occurred_at` (timezone-aware), `text`.
+Optional: pseudonymous `customer_ref`, `payment_reference`, decimal-string `amount`, `currency`, `region`, `language`.
+
+Server derives bank from credential and records `received_at`. First version handles create-only delivery; updates to an existing external ticket are explicitly deferred. Unique identity is `(bank_id, connector_id, external_id)`.
+
+Return 202 only after durable acceptance and atomic job enqueue: `complaint_id`, `receipt_id`, `processing_status`, `duplicate`. Same identity and normalized content returns existing IDs without a new job; different content returns 409. Reject invalid/unauthorised payloads before processing.
+
+### Evidence boundary
+
+Adfola exposes a bank-scoped service to read retained payment evidence by reference and a queued refresh operation. Opeyemi consumes this; Andrew never receives credentials.
+
+Normalized evidence: local `id`, `bank_id`, `provider`, `environment`, provider event ID where supplied, `payment_reference`, `event_type`, source status, `occurred_at`, `received_at`, safe source/request reference, optional decimal-string amount/currency, evidence basis and freshness.
+
+Do not infer missing fields. An exact reference link must also be tenant/provider scoped; an amount/time match is only a candidate.
+
+### Investigation boundary
+
+Opeyemi supplies Andrew a bounded, masked evidence bundle with stable local IDs, source/freshness labels and counts. Andrew returns validated structured content: observed facts, hypotheses, supporting/contradicting evidence IDs, missing evidence, suggested checks, suggested owner and corrective recommendations. Confidence describes a hypothesis, not a verified probability unless calibrated.
+
+### Corrective actions
+
+Opeyemi provides persisted incident actions with owner, due date, recommendation, status, bank-confirmed cause if provided, change reference, validation plan and validation observations. Suggested states: `proposed`, `accepted`, `in_progress`, `monitoring`, `verified`, `rejected`. Verify requires authorised review and recorded validation evidence.
+
+## Integration order
+
+1. Agree contracts, existing-file boundaries and migration sequence immediately.
+2. Build parallel vertical slices using synthetic fixtures; no one waits for live Forge access to write unit tests.
+3. Merge ingestion first; preserve existing complaint/worker behavior.
+4. Merge payment evidence and signature/idempotency tests.
+5. Merge structured investigation and corrective-action APIs.
+6. Deploy and smoke-test on Forge only after valid credential setup. Treat the kubeconfig pasted in conversation as disclosed: request replacement privately; do not reuse/copy its token into source.
+7. Run the complete synthetic complaint-to-prevention scenario and export actual OpenAPI.
+
+## Forge constraints
+
+- Bank and MaaS endpoints are reachable only from authorised Forge namespace workloads. Render/Vercel cannot directly call internal cluster hostnames.
+- Team namespace is `team10`; expected public route is `https://team10.xtradot.co` once deployed and verified.
+- One public Service named `app`, port 80; image architecture `linux/amd64`.
+- Plan backend + worker requests within namespace total 400m CPU / 768Mi memory. Do not copy resource settings for many pods without checking totals.
+- 60 calls/minute shared across bank and MaaS: coordinate a single budget; no per-complaint polling loops or model calls on dashboard reads.
+- XtraDot state is volatile. Retain evidence locally and label provider reset/stale records; never assume historical sandbox references remain queryable.
+- Database egress/persistence must be verified. Do not assume Supabase is reachable from Forge; use an approved persistent database path if not.
+- Only synthetic data in Forge, including social fixtures, logs and model inputs. Do not forward real X customer content into Forge without explicit organiser permission.
+
+## End-of-day acceptance
+
+- Synthetic support tickets from at least two channels enter through authenticated intake; replay does not duplicate complaints/jobs.
+- Related complaints are linked to an incident; exact membership and evidence are retrievable.
+- A sandbox timeout is retained as unknown and refreshed safely without resending.
+- Signed webhook verification, event deduplication and out-of-order handling are demonstrated.
+- Investigation cites real stored evidence IDs and distinguishes facts from hypotheses.
+- An operator assigns a corrective action, records a change and records validation; financial execution remains disabled.
+- Cross-bank requests are rejected; no secrets or raw PII appear in logs/API output.
+- Each person supplies tests, payload examples, errors and limitations. Full backend tests and migrations run in a configured environment; blocked checks are explicitly recorded, not called passed.
+
+## Tomorrow's frontend handoff
+
+Deliver actual OpenAPI, sample responses and error cases for: explicit session bootstrap, complaint intake/list/detail, incident list/detail/exact complaints, evidence timeline, investigation request/status/result, corrective-action create/update/list and connector health/provenance. Existing reconciliation/proposal endpoints remain supporting capabilities.
+
+GET/dashboard refresh must be read-only: no model calls, transfer submission or investigation triggered by page load. UI distinguishes sandbox events, simulated support tickets, social replay, stale data and missing evidence.
