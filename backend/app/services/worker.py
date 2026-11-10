@@ -419,3 +419,43 @@ def drain_jobs(
         "retried": retried,
         "dead_lettered": dead_lettered,
     }
+
+
+def run_worker_loop(poll_interval: float = 1.5) -> None:
+    """Continuously poll and process queued jobs with graceful SIGTERM handling."""
+    import logging
+    import signal
+    import time
+    from app.db.session import SessionLocal
+
+    logger = logging.getLogger("conflux.worker")
+    running = True
+
+    def _handle_exit(signum, frame):
+        nonlocal running
+        logger.info("Worker received shutdown signal (%s), exiting loop...", signum)
+        running = False
+
+    signal.signal(signal.SIGINT, _handle_exit)
+    signal.signal(signal.SIGTERM, _handle_exit)
+
+    logger.info("Conflux background worker started (poll_interval=%.1fs)", poll_interval)
+    while running:
+        try:
+            with SessionLocal() as db:
+                job = process_next_job(db)
+                if job is not None:
+                    logger.info("Processed job %s (kind=%s, status=%s)", job.id, job.kind.value, job.status.value)
+                else:
+                    time.sleep(poll_interval)
+        except Exception as exc:
+            logger.error("Unexpected worker loop error: %s", exc)
+            time.sleep(poll_interval)
+
+    logger.info("Worker loop stopped cleanly.")
+
+
+if __name__ == "__main__":
+    import logging
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    run_worker_loop()
