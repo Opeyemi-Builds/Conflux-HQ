@@ -95,11 +95,11 @@ def reputation_signals(text: str, metrics: dict[str, int] | None = None) -> dict
     value = text.casefold()
     flags: list[str] = []
     patterns = {
-        "public_escalation": r"(tag|mention|thread|viral|trend|retweet|share)",
-        "scam_allegation": r"(scam|fraud|stole|stolen|thief|criminal|hack)",
-        "service_failure": r"(failed|unable|down|not working|no credit|debited|charged twice)",
-        "regulatory_escalation": r"(cbn|ombudsman|lawyer|court|report you|sue)",
-        "abusive_language": r"(idiot|useless|terrible|worst|thieves|criminals)",
+        "public_escalation": r"\b(tag|mention|thread|viral|trend|retweet|share)\b",
+        "scam_allegation": r"\b(scam|fraud|stole|stolen|thief|criminal|hack)\b",
+        "service_failure": r"\b(failed|unable|down|not working|no credit|debited|charged twice)\b",
+        "regulatory_escalation": r"\b(cbn|ombudsman|lawyer|court|report you|sue)\b",
+        "abusive_language": r"\b(idiot|useless|terrible|worst|thieves|criminals)\b",
     }
     for flag, pattern in patterns.items():
         if re.search(pattern, value):

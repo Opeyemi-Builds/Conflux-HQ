@@ -116,25 +116,41 @@ def test_timeout_becomes_unknown_without_automatic_resend():
     assert calls == [("GET", "/v1/transfers/TRF-timeout")]
 
 
-def test_requery_uses_only_the_requery_endpoint_and_caller_supplied_contract():
+def test_requery_sends_session_id_and_returns_session_and_nip_code():
     captured = []
 
     def handler(request):
         captured.append(request)
         return httpx.Response(200, json={
             "status": "success",
-            "data": {"reference": "TRF-2", "status": "successful"},
+            "data": {
+                "reference": "TRF-2",
+                "session_id": "000014261109114532907716204851",
+                "nip_response_code": "00",
+                "status": "successful",
+                "amount": "75000.00",
+                "currency": "NGN",
+            },
             "request_id": "req-2",
         })
 
-    request_body = {"reference": "TRF-2"}
     with make_client(handler) as client:
-        observed = client.requery_interbank_transfer("TRF-2", request_body=request_body)
+        observed = client.requery_interbank_transfer(
+            "TRF-2", session_id="000014261109114532907716204851"
+        )
 
     assert captured[0].method == "POST"
     assert captured[0].url.path == "/v1/transfers/interbank/requery"
-    assert json.loads(captured[0].content) == request_body
+    assert json.loads(captured[0].content) == {"session_id": "000014261109114532907716204851"}
     assert observed.source_status == "successful"
+    assert observed.session_id == "000014261109114532907716204851"
+    assert observed.nip_response_code == "00"
+
+
+def test_requery_requires_session_id_before_network_call():
+    with make_client(lambda _request: pytest.fail("request must not be sent")) as client:
+        with pytest.raises(ValueError, match="session_id"):
+            client.requery_interbank_transfer("TRF-expected", session_id="  ")
 
 
 def test_requery_pending_is_not_treated_as_failed():
@@ -149,21 +165,13 @@ def test_requery_pending_is_not_treated_as_failed():
 
     with make_client(handler) as client:
         observed = client.requery_interbank_transfer(
-            "TRF-pending", request_body={"reference": "TRF-pending"}
+            "TRF-pending", session_id="000014261109114532907716204851"
         )
 
     assert observed.source_status == "pending"
     assert observed.requery_required is True
     assert observed.source_status != "failed"
     assert calls == [("POST", "/v1/transfers/interbank/requery")]
-
-
-def test_requery_rejects_mismatched_caller_reference_before_network_call():
-    with make_client(lambda _request: pytest.fail("request must not be sent")) as client:
-        with pytest.raises(ValueError, match="must match"):
-            client.requery_interbank_transfer(
-                "TRF-expected", request_body={"reference": "TRF-other"}
-            )
 
 
 def test_lookup_does_not_trust_a_response_for_another_reference():
@@ -333,7 +341,7 @@ def test_duplicate_events_are_ignored_and_scope_includes_tenant():
         append_unique_events([first], [replay])
 
 
-def make_webhook_client(monkeypatch, *, secret="webhook-secret", event_types="transfer.updated"):
+def make_webhook_client(monkeypatch, *, secret="webhook-secret", event_types="transfer.successful,transfer.failed,transfer.pending,transfer.reversed"):
     bank_id = uuid.uuid4()
     monkeypatch.setenv("XTRADOT_WEBHOOK_SECRET", secret)
     monkeypatch.setenv("XTRADOT_BANK_ID", str(bank_id))
@@ -368,7 +376,7 @@ def make_webhook_client(monkeypatch, *, secret="webhook-secret", event_types="tr
     return TestClient(app), sessions, engine, bank_id
 
 
-def signed_headers(body, *, event_type="transfer.updated", timestamp=None, secret="webhook-secret"):
+def signed_headers(body, *, event_type="transfer.successful", timestamp=None, secret="webhook-secret"):
     stamp = timestamp or datetime.now(timezone.utc).isoformat()
     return {
         "x-forge-event": event_type,
@@ -380,7 +388,12 @@ def signed_headers(body, *, event_type="transfer.updated", timestamp=None, secre
 def test_webhook_persists_verbatim_signed_event_and_deduplicates(monkeypatch):
     client, sessions, engine, bank_id = make_webhook_client(monkeypatch)
     try:
-        body = b'{"event_id":"evt-1","unknown":"keep exactly as received"}'
+        body = (
+            b'{"event":"transfer.successful","event_id":"evt-1",'
+            b'"created_at":"2026-11-09T11:42:05Z","attempt":1,'
+            b'"data":{"reference":"TRF-1","status":"successful",'
+            b'"amount":25000.00,"currency":"NGN"}}'
+        )
         headers = signed_headers(body)
         first = client.post("/api/v1/forge/webhooks", content=body, headers=headers)
         replay = client.post("/api/v1/forge/webhooks", content=body, headers=headers)
@@ -397,7 +410,7 @@ def test_webhook_persists_verbatim_signed_event_and_deduplicates(monkeypatch):
             assert receipt.bank_id == bank_id
             assert receipt.provider == "xtradot" and receipt.environment == "sandbox"
             assert receipt.event_id == "evt-1"
-            assert receipt.event_type == "transfer.updated"
+            assert receipt.event_type == "transfer.successful"
             assert receipt.raw_body == body
             assert receipt.raw_timestamp == headers["x-forge-timestamp"]
             assert receipt.signature_valid is True
@@ -419,12 +432,41 @@ def test_webhook_persists_verbatim_signed_event_and_deduplicates(monkeypatch):
         engine.dispose()
 
 
+def test_webhook_redelivery_of_documented_body_preserves_verbatim_bytes(monkeypatch):
+    """A .05-style withheld first delivery replays byte-identical and normalizes once."""
+    client, sessions, engine, bank_id = make_webhook_client(monkeypatch)
+    try:
+        body = (
+            b'{"event":"transfer.successful","event_id":"evt-redeliver-05",'
+            b'"created_at":"2026-11-09T11:42:05Z","attempt":2,'
+            b'"data":{"reference":"TRF-18000","status":"successful",'
+            b'"amount":18000.05,"currency":"NGN"}}'
+        )
+        headers = signed_headers(body)
+        first = client.post("/api/v1/forge/webhooks", content=body, headers=headers)
+        replay = client.post("/api/v1/forge/webhooks", content=body, headers=headers)
+        assert replay.json()["status"] == "duplicate"
+        with sessions() as db:
+            receipts = db.scalars(select(XtradotWebhookReceipt)).all()
+            assert len(receipts) == 1
+            receipt_id = receipts[0].id
+        with sessions() as db:
+            processed = process_xtradot_webhook_receipt(
+                db, receipt_id=receipt_id, bank_id=bank_id
+            )
+            assert processed["status"] == "processed"
+            assert processed["evidence"]["amount"] == "18000.05"
+    finally:
+        client.close()
+        engine.dispose()
+
+
 @pytest.mark.parametrize(
     "event_type,body",
     [
         ("not-configured", b'{"event_id":"evt-unknown"}'),
-        ("transfer.updated", b'{"different_field":"no event id"}'),
-        ("transfer.updated", b"not-json"),
+        ("transfer.successful", b'{"different_field":"no event id"}'),
+        ("transfer.successful", b"not-json"),
     ],
 )
 def test_unknown_event_or_missing_payload_key_is_saved_as_ignored(monkeypatch, event_type, body):
@@ -454,7 +496,7 @@ def test_missing_secret_is_unavailable_without_accepting_or_persisting(monkeypat
         response = client.post(
             "/api/v1/forge/webhooks",
             content=body,
-            headers={"x-forge-event": "transfer.updated"},
+            headers={"x-forge-event": "transfer.successful"},
         )
         assert response.status_code == 503, response.text
         with sessions() as db:
@@ -532,6 +574,100 @@ def test_webhook_body_size_is_bounded(monkeypatch):
         engine.dispose()
 
 
+def test_worker_normalizes_documented_transfer_event(monkeypatch):
+    """A v2 transfer.successful body normalizes to one evidence event; raw bytes stay intact.
+
+    Per Mock Spec v2 the event body is {event, event_id, created_at, attempt,
+    data:{reference, session_id, amount, currency, status}}.
+    """
+    client, sessions, engine, bank_id = make_webhook_client(monkeypatch)
+    try:
+        body = (
+            b'{"event":"transfer.successful","event_id":"evt-01JC8Z4K2M",'
+            b'"created_at":"2026-11-09T11:42:05Z","attempt":1,'
+            b'"data":{"reference":"TRF-20261109-0001",'
+            b'"session_id":"000014261109114200123456789012","amount":25000.00,'
+            b'"currency":"NGN","status":"successful"}}'
+        )
+        response = client.post(
+            "/api/v1/forge/webhooks",
+            content=body,
+            headers=signed_headers(body, event_type="transfer.successful"),
+        )
+        assert response.status_code == 202, response.text
+        receipt_id = uuid.UUID(response.json()["receipt_id"])
+        with sessions() as db:
+            processed = process_xtradot_webhook_receipt(
+                db, receipt_id=receipt_id, bank_id=bank_id
+            )
+            assert processed["status"] == "processed"
+            evidence = processed["evidence"]
+            assert evidence["payment_reference"] == "TRF-20261109-0001"
+            assert evidence["event_type"] == "transfer.successful"
+            assert evidence["source_status"] == "successful"
+            assert evidence["amount"] == "25000.00"
+            assert evidence["currency"] == "NGN"
+            assert evidence["bank_id"] == str(bank_id)
+        with sessions() as db:
+            from app.models.xtradot_webhook import XtradotWebhookReceipt
+
+            receipt = db.get(XtradotWebhookReceipt, receipt_id)
+            assert receipt.raw_body == body  # verbatim raw evidence is retained
+            assert receipt.status == "processed"
+            assert receipt.processed_at is not None
+    finally:
+        client.close()
+        engine.dispose()
+
+
+def test_worker_ignores_undocumented_body_shape(monkeypatch):
+    """A body outside the documented v2 shape stays ignored, never guessed."""
+    client, sessions, engine, bank_id = make_webhook_client(monkeypatch)
+    try:
+        body = b'{"event_id":"evt-weird","surprise":{"nested":true}}'
+        response = client.post(
+            "/api/v1/forge/webhooks",
+            content=body,
+            headers=signed_headers(body, event_type="transfer.successful"),
+        )
+        assert response.status_code == 202
+        receipt_id = uuid.UUID(response.json()["receipt_id"])
+        with sessions() as db:
+            processed = process_xtradot_webhook_receipt(
+                db, receipt_id=receipt_id, bank_id=bank_id
+            )
+            assert processed["status"] == "ignored"
+            assert "evidence" not in processed
+    finally:
+        client.close()
+        engine.dispose()
+
+
+def test_worker_ignores_header_body_event_mismatch(monkeypatch):
+    """A header/body event mismatch is untrustworthy evidence and stays ignored."""
+    client, sessions, engine, bank_id = make_webhook_client(monkeypatch)
+    try:
+        body = (
+            b'{"event":"transfer.failed","event_id":"evt-mismatch",'
+            b'"created_at":"2026-11-09T11:42:05Z",'
+            b'"data":{"reference":"TRF-1","status":"failed"}}'
+        )
+        response = client.post(
+            "/api/v1/forge/webhooks",
+            content=body,
+            headers=signed_headers(body, event_type="transfer.successful"),
+        )
+        receipt_id = uuid.UUID(response.json()["receipt_id"])
+        with sessions() as db:
+            processed = process_xtradot_webhook_receipt(
+                db, receipt_id=receipt_id, bank_id=bank_id
+            )
+            assert processed["status"] == "ignored"
+    finally:
+        client.close()
+        engine.dispose()
+
+
 def test_worker_processing_is_bank_scoped(monkeypatch):
     client, sessions, engine, bank_id = make_webhook_client(monkeypatch)
     try:
@@ -551,7 +687,8 @@ def test_worker_processing_is_bank_scoped(monkeypatch):
             processed = process_xtradot_webhook_receipt(
                 db, receipt_id=receipt_id, bank_id=bank_id
             )
-            assert processed["status"] == "processed"
+            # Undocumented body shape: safely ignored, never guessed.
+            assert processed["status"] == "ignored"
     finally:
         client.close()
         engine.dispose()

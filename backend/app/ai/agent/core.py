@@ -1,4 +1,4 @@
-"""Simple bounded incident investigation using deterministic evidence plus Claude/Gemini."""
+"""Simple bounded incident investigation using deterministic evidence plus MaaS/Gemini."""
 from sqlalchemy.orm import Session
 
 from app.ai.evidence import build_evidence, rank_events

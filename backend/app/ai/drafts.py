@@ -2,7 +2,6 @@
 import json
 from pathlib import Path
 
-import anthropic
 from sqlalchemy.orm import Session
 
 from app.ai.evidence import build_evidence
@@ -58,24 +57,9 @@ def _llm_draft_text(prompt_file: str, facts: dict) -> str | None:
             text = gemini_text(data).strip()
             return text or None
 
-        client = anthropic.Anthropic(
-            api_key=settings.anthropic_api_key,
-            timeout=settings.anthropic_timeout_seconds,
-            max_retries=settings.anthropic_max_retries,
-        )
-        response = client.messages.create(
-            model=settings.anthropic_model,
-            max_tokens=400,
-            temperature=0,
-            system=system,
-            messages=[{"role": "user", "content": user_text}],
-        )
-        for block in response.content:
-            if getattr(block, "type", None) == "text" and block.text.strip():
-                return block.text.strip()
+        return None
     except Exception:
         return None
-    return None
 
 
 def _grounded_or_fallback(
