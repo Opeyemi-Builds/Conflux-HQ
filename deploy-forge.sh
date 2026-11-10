@@ -64,3 +64,13 @@ echo " Public Endpoint: https://team10.xtradot.co"
 echo " Active Pod:      $POD_NAME"
 echo " Verify Health:   curl -I https://team10.xtradot.co/api/v1/healthz"
 echo "=========================================================="
+echo ""
+
+read -rp "Would you like to forward BOTH Frontend (3000) & Backend (8000) to localhost now? (y/N): " START_PF
+if [[ "$START_PF" =~ ^[Yy]$ ]]; then
+  echo "Forwarding $POD_NAME to local ports:"
+  echo "  -> Frontend: http://localhost:3000"
+  echo "  -> Backend:  http://localhost:8000 (API docs: http://localhost:8000/docs)"
+  echo "Press Ctrl+C to stop port-forwarding."
+  kubectl port-forward pod/"$POD_NAME" 3000:3000 8000:8000 -n "$NAMESPACE"
+fi
