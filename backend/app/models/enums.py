@@ -166,3 +166,19 @@ class JobStatus(str, enum.Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     DEAD_LETTER = "dead_letter"
+
+
+class CorrectiveActionStatus(str, enum.Enum):
+    PROPOSED = "proposed"
+    ACCEPTED = "accepted"
+    IN_PROGRESS = "in_progress"
+    MONITORING = "monitoring"
+    VERIFIED = "verified"
+    REJECTED = "rejected"
+
+
+class InvestigationRunStatus(str, enum.Enum):
+    REQUESTED = "requested"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"

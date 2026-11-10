@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.routes import ai, analytics, auth, bank, complaints, health, incidents, ingestion, jobs, reconciliation, social, synthetic
+from app.api.routes import ai, analytics, auth, bank, complaints, health, incidents, ingestion, jobs, reconciliation, remediation, social, synthetic
 from app.core.config import get_settings
 
 api_router = APIRouter()
@@ -11,6 +11,7 @@ if not get_settings().demo_mode:
 api_router.include_router(ingestion.router)
 api_router.include_router(complaints.router)
 api_router.include_router(incidents.router)
+api_router.include_router(remediation.router)
 api_router.include_router(analytics.router)
 api_router.include_router(ai.router)
 api_router.include_router(jobs.router)

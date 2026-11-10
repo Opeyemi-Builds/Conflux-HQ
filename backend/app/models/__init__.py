@@ -9,6 +9,7 @@ from app.models.transaction import Transaction
 from app.models.social import BankAlias, SocialReceipt
 from app.models.payment_exception import PaymentException
 from app.models.payment_proposal import PaymentProposal
+from app.models.remediation import CorrectiveAction, InvestigationRun
 
 __all__ = [
     "AuditLog",
@@ -16,9 +17,11 @@ __all__ = [
     "BankAlias",
     "Complaint",
     "ComplaintReceipt",
+    "CorrectiveAction",
     "Draft",
     "Incident",
     "IngestionConnector",
+    "InvestigationRun",
     "Job",
     "PaymentException",
     "PaymentProposal",

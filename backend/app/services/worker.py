@@ -222,6 +222,61 @@ def _handle_investigate_incident(db: Session, job: Job) -> dict:
     db.commit()
     incident = investigate_incident(db, job.bank_id, incident, actor="worker")
     drafts = create_drafts(db, job.bank_id, incident, actor="worker")
+
+    # Persist a read-back investigation run when this job was explicitly requested
+    # via POST /api/v1/investigations (payload carries run_id). Legacy jobs without
+    # run_id keep working: they update the incident but create no run row.
+    run_id = job.payload.get("run_id")
+    if run_id is not None:
+        try:
+            from app.services import remediation as remediation_service
+
+            evidence = getattr(incident, "_evidence", {}) or {}
+            evidence_ids = [
+                item.get("id") for item in evidence.get("events", [])
+            ] if isinstance(evidence, dict) else []
+            tx_info = evidence.get("transactions", {}) if isinstance(evidence, dict) else {}
+            facts = [
+                f"{evidence.get('incident', {}).get('complaint_count', 0)} complaints vs baseline "
+                f"{evidence.get('incident', {}).get('baseline', 0)}",
+                f"{tx_info.get('failed', 0)} failed transactions observed, "
+                f"{tx_info.get('unreversed_failed', 0)} unreversed",
+            ]
+            remediation_service.complete_investigation_run(
+                db,
+                run_id=uuid.UUID(str(run_id)),
+                model=getattr(incident, "_ai_model", None),
+                provider="auto",
+                prompt_version=getattr(incident, "_ai_prompt_version", None),
+                confidence=incident.cause_confidence,
+                facts=facts,
+                hypotheses=[incident.likely_cause] if incident.likely_cause else [],
+                evidence_ids=evidence_ids,
+                missing_evidence=["payment settlement records"] if not evidence_ids else [],
+                recommended_checks=["verify payment-path logs", "confirm settlement status"],
+                recommended_owner=None,
+            )
+        except Exception as exc:
+            from app.services import remediation as remediation_service
+
+            try:
+                remediation_service.complete_investigation_run(
+                    db,
+                    run_id=uuid.UUID(str(run_id)),
+                    model=None,
+                    provider=None,
+                    prompt_version=None,
+                    confidence=None,
+                    facts=[],
+                    hypotheses=[],
+                    evidence_ids=[],
+                    missing_evidence=[],
+                    recommended_checks=[],
+                    recommended_owner=None,
+                    error=str(exc)[:1000],
+                )
+            except Exception:
+                pass
     return {
         "incident_id": str(incident.id),
         "likely_cause": incident.likely_cause,

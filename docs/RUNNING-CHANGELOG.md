@@ -8,7 +8,12 @@ This is an active, running reference documenting **cross-cutting changes** that 
 
 | Area | Change | Who It Affects | Action Required |
 |---|---|---|---|
-| **Alembic Head** | Head is now `0009_bank_ingestion` (revises `0008_payment_proposals`) | **Opeyemi**, all developers | Base any new migrations on `0009_bank_ingestion` |
+| **Alembic Head** | Head is now `0010_remediation` (revises `0009_bank_ingestion`) | **Opeyemi**, all developers | Base any new migrations on `0010_remediation` |
+| **Corrective Actions** | New `corrective_actions` table + `POST/PATCH /incidents/{id}/actions`, `PATCH /actions/{id}` | **Frontend**, **Opeyemi** | Render action lifecycle `proposed→accepted→in_progress→monitoring→verified`; `verified` needs bank_admin + validation evidence |
+| **Investigation Runs** | New `investigation_runs` table + `POST /investigations`, `GET /incidents/{id}/investigations`, `GET /investigations/{id}` | **Andrew**, **Frontend**, **Opeyemi** | GETs never queue jobs; runs persist facts/hypotheses/evidence IDs after drain |
+| **Incident Overview** | New `GET /incidents/{id}/overview` single payload (complaints, social corroboration, payment evidence, latest run, actions) | **Frontend** | Use for incident detail view; social counts are triage-only, not proof |
+| **Connector Health** | New `GET /health/connectors` (queue, intake, social, investigation, evidence states) | **Frontend**, **Opeyemi** | Show per-provider states; optional provider being down never masks DB health |
+| **Synthetic Reset** | Reset now deletes receipts/proposals/cases/actions/runs before parents (FK-safe) | **Opeyemi**, **dev_id** | Safe to reset demo with ingested tickets present |
 | **`complaints` Table** | Added column `payment_reference VARCHAR(64)`, indexed | **Adfola**, **Opeyemi**, **Frontend** | Use `complaint.payment_reference` for transaction matching & UI display |
 | **`ComplaintRead` Schema** | Added `payment_reference: str | None = None` | **Frontend**, **Opeyemi** | Update TypeScript types to consume `payment_reference` |
 | **Worker Queue** | Ingested complaints enqueue `JobKind.CLASSIFY_COMPLAINT` with no pre-labels | **Andrew**, **Opeyemi** | MaaS classifier evaluates severity dynamically |
