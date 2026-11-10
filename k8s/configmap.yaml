@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: conflux-config
+  namespace: team10
+data:
+  ENVIRONMENT: "staging"
+  APP_NAME: "Conflux HQ"
+  DATABASE_URL: "sqlite:////data/conflux.db"
+  AUTO_CREATE_TABLES: "false"
+  SOCIAL_LIVE_ENABLED: "false"
+  DEMO_MODE: "true"
+  DEMO_USERNAME: "Zymic Bank"
+  DEMO_PASSWORD: "123"
+  XTRADOT_BASE_URL: "http://bank-api.ingress-apisix.svc.cluster.local/v1"
+  HUAWEI_MAAS_BASE_URL: "http://huawei-maas.ingress-apisix.svc.cluster.local/openai/v1"
+  BACKEND_INTERNAL_URL: "http://127.0.0.1:8000"
+  SPIKE_BUCKET_MINUTES: "15"
+  SPIKE_MIN_VOLUME: "10"
+
