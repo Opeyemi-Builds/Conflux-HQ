@@ -13,28 +13,18 @@ def prompt_version(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
 
 
-def usage(response) -> tuple[int, int]:
-    """Read Anthropic token usage defensively across SDK versions."""
-    usage_data = getattr(response, "usage", None)
-    if usage_data is None:
-        return 0, 0
-    return int(getattr(usage_data, "input_tokens", 0) or 0), int(
-        getattr(usage_data, "output_tokens", 0) or 0
-    )
-
-
 def active_model(settings) -> str:
     provider = settings.ai_provider.lower().strip()
-    if provider == "maas":
-        return getattr(settings, "maas_model", "glm-5.2")
-    return settings.gemini_model if provider == "gemini" else settings.anthropic_model
+    if provider == "gemini":
+        return settings.gemini_model
+    return getattr(settings, "maas_model", "glm-5.2")
 
 
 def active_key(settings) -> str | None:
     provider = settings.ai_provider.lower().strip()
-    if provider == "maas":
-        return getattr(settings, "gateway_key", None)
-    return settings.gemini_api_key if provider == "gemini" else settings.anthropic_api_key
+    if provider == "gemini":
+        return settings.gemini_api_key
+    return getattr(settings, "gateway_key", None)
 
 
 def gemini_schema(model: type) -> dict:

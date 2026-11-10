@@ -45,7 +45,7 @@ def connectors_health(db: DbSession, user: AuthUser) -> dict:
         ),
         "investigation": (
             "configured"
-            if (s.anthropic_api_key or s.gemini_api_key)
+            if (s.gateway_key or s.gemini_api_key)
             else "fallback_only"
         ),
         "payment_evidence": "sandbox_only",

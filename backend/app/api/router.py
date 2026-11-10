@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.routes import ai, analytics, auth, bank, complaints, forge_webhooks, health, incidents, ingestion, jobs, reconciliation, remediation, social, synthetic
+from app.api.routes import ai, analytics, api_keys, auth, bank, complaints, forge_webhooks, health, incidents, ingestion, jobs, reconciliation, remediation, social, synthetic
 from app.core.config import get_settings
 
 api_router = APIRouter()
@@ -15,6 +15,8 @@ api_router.include_router(remediation.router)
 api_router.include_router(analytics.router)
 api_router.include_router(ai.router)
 api_router.include_router(jobs.router)
+api_router.include_router(api_keys.management)
+api_router.include_router(api_keys.machine)
 api_router.include_router(forge_webhooks.router)
 api_router.include_router(social.router)
 api_router.include_router(reconciliation.router)

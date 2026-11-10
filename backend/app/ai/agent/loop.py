@@ -2,11 +2,10 @@ import json
 import time
 from pathlib import Path
 
-import anthropic
 from pydantic import ValidationError
 
 from app.ai.evidence import rank_events
-from app.ai.runtime import active_model, gemini_function_calls, gemini_request, prompt_version, usage
+from app.ai.runtime import active_model, gemini_function_calls, gemini_request, prompt_version
 from app.ai.schemas import CandidateCause, Evidence, Findings
 from app.core.config import get_settings
 from .tools import ALLOWED_TOOL_NAMES, TOOL_SCHEMAS, run_tool
@@ -148,123 +147,65 @@ def run_investigation_loop(evidence: dict, audit=None) -> tuple[Findings, str, l
             return result
         except RateLimitExceeded:
             return finish(fallback_findings(evidence), "rules")
-    configured_key = settings.gemini_api_key if provider == "gemini" else settings.anthropic_api_key
-    if not configured_key:
+    if provider != "gemini":
+        # MaaS is handled above; any other provider selection falls back to rules.
+        return finish(fallback_findings(evidence), "rules")
+    if not settings.gemini_api_key:
         return finish(fallback_findings(evidence), "rules")
 
     system = PROMPT.read_text(encoding="utf-8") if PROMPT.exists() else "Investigate using tools and submit findings."
 
-    if provider == "gemini":
-        declarations = []
-        for tool in TOOL_SCHEMAS:
-            schema = dict(tool["input_schema"])
-            schema.pop("title", None)
-            schema.pop("additionalProperties", None)
-            declarations.append({"name": tool["name"], "description": tool["description"], "parameters": schema})
-        contents = [{"role": "user", "parts": [{"text": "Investigate the incident using the evidence tools, then call submit_findings.\n" + json.dumps(evidence, default=str)}]}]
-        payload_base = {
-            "systemInstruction": {"parts": [{"text": system}]},
-            "tools": [{"functionDeclarations": declarations}],
-            "generationConfig": {"temperature": 0, "maxOutputTokens": 1600},
-        }
-        for step in range(MAX_STEPS):
-            try:
-                payload = {**payload_base, "contents": contents}
-                data, step_input, step_output = gemini_request(
-                    settings.gemini_api_key, settings.gemini_model, payload,
-                    settings.gemini_timeout_seconds, settings.gemini_max_attempts,
-                )
-                input_tokens += step_input
-                output_tokens += step_output
-            except Exception:
-                break
-            calls = gemini_function_calls(data)
-            if not calls:
-                break
-            parts = []
-            for call in calls:
-                name = call.get("name", "")
-                arguments = call.get("args", {})
-                if name == "submit_findings":
-                    try:
-                        findings = Findings.model_validate(arguments)
-                        entry = {"step": step + 1, "tool": "submit_findings", "input": arguments}
-                        trace.append(entry)
-                        if audit:
-                            audit(entry)
-                        return finish(findings, "llm")
-                    except ValidationError as exc:
-                        response = {"error": f"Invalid findings: {exc}"}
-                elif name in ALLOWED_TOOL_NAMES:
-                    try:
-                        response = run_tool(name, arguments, evidence)
-                    except Exception as exc:
-                        response = {"error": str(exc)}
-                else:
-                    response = {"error": f"Tool is not allowlisted: {name}"}
-                entry = {"step": step + 1, "tool": name, "input": arguments, "output": response}
-                trace.append(entry)
-                if audit:
-                    audit(entry)
-                parts.append({"functionResponse": {"name": name, "response": response}})
-            contents.append({"role": "user", "parts": parts})
-        return finish(fallback_findings(evidence), "rules")
-
-    messages = [{"role": "user", "content": "Investigate the incident using the evidence tools, then call submit_findings.\n" + json.dumps(evidence, default=str)}]
-    client = anthropic.Anthropic(
-        api_key=settings.anthropic_api_key,
-        timeout=settings.anthropic_timeout_seconds,
-        max_retries=settings.anthropic_max_retries,
-    )
+    declarations = []
+    for tool in TOOL_SCHEMAS:
+        schema = dict(tool["input_schema"])
+        schema.pop("title", None)
+        schema.pop("additionalProperties", None)
+        declarations.append({"name": tool["name"], "description": tool["description"], "parameters": schema})
+    contents = [{"role": "user", "parts": [{"text": "Investigate the incident using the evidence tools, then call submit_findings.\n" + json.dumps(evidence, default=str)}]}]
+    payload_base = {
+        "systemInstruction": {"parts": [{"text": system}]},
+        "tools": [{"functionDeclarations": declarations}],
+        "generationConfig": {"temperature": 0, "maxOutputTokens": 1600},
+    }
     for step in range(MAX_STEPS):
         try:
-            response = client.messages.create(
-                model=settings.anthropic_model,
-                max_tokens=1600,
-                temperature=0,
-                system=system,
-                tools=TOOL_SCHEMAS,
-                messages=messages,
+            payload = {**payload_base, "contents": contents}
+            data, step_input, step_output = gemini_request(
+                settings.gemini_api_key, settings.gemini_model, payload,
+                settings.gemini_timeout_seconds, settings.gemini_max_attempts,
             )
-            response_input, response_output = usage(response)
-            input_tokens += response_input
-            output_tokens += response_output
+            input_tokens += step_input
+            output_tokens += step_output
         except Exception:
             break
-        messages.append({"role": "assistant", "content": response.content})
-        calls = [block for block in response.content if block.type == "tool_use"]
+        calls = gemini_function_calls(data)
         if not calls:
             break
-        tool_results = []
+        parts = []
         for call in calls:
-            if call.name == "submit_findings":
+            name = call.get("name", "")
+            arguments = call.get("args", {})
+            if name == "submit_findings":
                 try:
-                    findings = Findings.model_validate(call.input)
-                    entry = {"step": step + 1, "tool": "submit_findings", "input": call.input}
+                    findings = Findings.model_validate(arguments)
+                    entry = {"step": step + 1, "tool": "submit_findings", "input": arguments}
                     trace.append(entry)
                     if audit:
                         audit(entry)
                     return finish(findings, "llm")
                 except ValidationError as exc:
-                    content = f"Invalid findings: {exc}"
-            elif call.name in ALLOWED_TOOL_NAMES:
+                    response = {"error": f"Invalid findings: {exc}"}
+            elif name in ALLOWED_TOOL_NAMES:
                 try:
-                    result = run_tool(call.name, call.input, evidence)
-                    content = json.dumps(result, default=str)
+                    response = run_tool(name, arguments, evidence)
                 except Exception as exc:
-                    result = {"error": str(exc)}
-                    content = json.dumps(result)
+                    response = {"error": str(exc)}
             else:
-                content = json.dumps({"error": f"Tool is not allowlisted: {call.name}"})
-            entry = {
-                "step": step + 1,
-                "tool": call.name,
-                "input": call.input,
-                "output": json.loads(content) if content.startswith("{") else content,
-            }
+                response = {"error": f"Tool is not allowlisted: {name}"}
+            entry = {"step": step + 1, "tool": name, "input": arguments, "output": response}
             trace.append(entry)
             if audit:
                 audit(entry)
-            tool_results.append({"type": "tool_result", "tool_use_id": call.id, "content": content})
-        messages.append({"role": "user", "content": tool_results})
+            parts.append({"functionResponse": {"name": name, "response": response}})
+        contents.append({"role": "user", "parts": parts})
     return finish(fallback_findings(evidence), "rules")

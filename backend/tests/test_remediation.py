@@ -7,7 +7,12 @@ from app.models.enums import IssueType
 
 def seed_incident(client):
     """Seed one classified complaint, run detection, return the incident id."""
+    from app.services.spike_detection import bucket_start
+
     now = datetime.now(timezone.utc)
+    # Pin seeds inside the *current* 15-min bucket: `now - 5min` straddles the
+    # bucket boundary ~1/3 of the time, leaving detection with an empty bucket.
+    slot = bucket_start(now, 15) + timedelta(minutes=1)
     created = []
     for i in range(12):
         r = client.post(
@@ -15,7 +20,7 @@ def seed_incident(client):
             json={
                 "channel": "in_app",
                 "text": f"Transfer of NGN 25000 failed and account debited {i}",
-                "occurred_at": (now - timedelta(minutes=5)).isoformat(),
+                "occurred_at": slot.isoformat(),
                 "issue_type": "failed_transfer",
             },
         )

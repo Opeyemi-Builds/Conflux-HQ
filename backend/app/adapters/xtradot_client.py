@@ -140,25 +140,22 @@ class XtradotClient:
         self,
         reference: str,
         *,
-        request_body: Mapping[str, Any],
+        session_id: str,
     ) -> TransferObservation:
-        """Call the sandbox requery endpoint using a body supplied from Mock Spec v2.
+        """Query the sandbox transaction-status endpoint (TSQ).
 
-        The provider request body is deliberately not guessed here. The caller must
-        supply the exact schema from the authoritative sandbox specification.
+        Per Mock Spec v2 the requery body is exactly ``{"session_id": ...}``;
+        the provider echoes ``reference`` in the response, which is validated
+        against the requested reference. Never resubmits a transfer.
         """
         self._validate_reference(reference)
-        if not request_body:
-            raise ValueError("request_body must follow the XtraDot requery specification")
-        for field in ("reference", "transaction_reference"):
-            body_reference = request_body.get(field)
-            if body_reference is not None and body_reference != reference:
-                raise ValueError("requery body reference must match the requested reference")
+        if not isinstance(session_id, str) or not session_id.strip() or len(session_id) > 160:
+            raise ValueError("session_id is required by the XtraDot TSQ specification")
         return self._request(
             "POST",
             "/transfers/interbank/requery",
             reference=reference,
-            json_body=dict(request_body),
+            json_body={"session_id": session_id.strip()},
         )
 
     @staticmethod
@@ -240,17 +237,26 @@ class XtradotClient:
         currency = data.get("currency")
         if currency is not None and (not isinstance(currency, str) or len(currency) != 3):
             currency = None
+        session_id = data.get("session_id")
+        if not isinstance(session_id, str) or not session_id.strip() or len(session_id) > 160:
+            session_id = None
+        nip_code = data.get("nip_response_code")
+        if not isinstance(nip_code, str) or not nip_code.strip() or len(nip_code) > 16:
+            nip_code = None
         return TransferObservation(
             payment_reference=reference,
             source_status=provider_status,
             amount=amount,
             currency=currency,
             occurred_at=_parse_provider_time(data.get("occurred_at") or data.get("created_at")),
+            session_id=session_id,
+            nip_response_code=nip_code,
             received_at=self._now(),
             safe_request_id=_safe_request_id(payload),
             evidence_basis="sandbox_provider_response",
             freshness="unknown",
-            # The sandbox status vocabulary and finality rules are not documented.
+            # Per Mock Spec v2, interbank 202 is pending, TIMEOUT is outcome_unknown
+            # until requery, and only an exact reference link is tenant-scoped proof.
             requery_required=True,
         )
 

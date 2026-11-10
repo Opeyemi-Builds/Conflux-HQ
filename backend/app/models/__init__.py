@@ -1,4 +1,5 @@
 from app.models.audit_log import AuditLog
+from app.models.api_key import ApiKey
 from app.models.bank import Bank, Profile
 from app.models.complaint import Complaint
 from app.models.incident import Draft, Incident
@@ -13,6 +14,7 @@ from app.models.remediation import CorrectiveAction, InvestigationRun
 from app.models.xtradot_webhook import XtradotWebhookReceipt
 
 __all__ = [
+    "ApiKey",
     "AuditLog",
     "Bank",
     "BankAlias",

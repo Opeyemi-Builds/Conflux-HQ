@@ -1,6 +1,6 @@
 """AI implementation for Conflux HQ.
 
-- classifier.py classifies masked complaints with Claude or deterministic fallback.
+- classifier.py classifies masked complaints with MaaS or deterministic fallback.
 - evidence.py builds factual incident evidence from database records.
 - agent.py turns evidence into a bounded investigation result.
 - drafts.py creates customer and IT drafts, which require human approval.

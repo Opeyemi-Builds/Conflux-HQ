@@ -23,6 +23,8 @@ class TransferObservation(BaseModel):
     amount: str | None = None
     currency: str | None = None
     occurred_at: datetime | None = None
+    session_id: str | None = Field(default=None, max_length=160)
+    nip_response_code: str | None = Field(default=None, max_length=16)
     received_at: datetime
     safe_request_id: str | None = None
     evidence_basis: Literal[
