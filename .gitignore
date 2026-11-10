@@ -2,6 +2,12 @@
 .env
 .env.*
 !.env.example
+k8s/secret.yaml
+k8s/secrets.yaml
+!k8s/secret.example.yaml
+team10.yml
+*.kubeconfig
+kubectl
 *.pem
 *.key
 *.secret
