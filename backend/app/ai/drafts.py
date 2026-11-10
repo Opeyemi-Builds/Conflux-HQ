@@ -26,6 +26,22 @@ def _llm_draft_text(prompt_file: str, facts: dict) -> str | None:
     user_text = "Facts JSON:\n" + json.dumps(facts, default=str)
     provider = settings.ai_provider.lower().strip()
     try:
+        if provider == "maas":
+            from app.ai.providers.maas import MaasConfig, chat_completion
+            from app.ai.providers.rate_limit import get_limiter
+            from app.ai.providers.settings import maas_active, maas_config_from_settings, maas_key_from_settings
+            if not maas_active(settings):
+                return None
+            get_limiter(int(settings.maas_rate_limit_per_minute or 60)).acquire()
+            cfg = maas_config_from_settings(settings)
+            messages = [
+                {"role": "system", "content": system + " Return only the draft text, no JSON, no preamble."},
+                {"role": "user", "content": user_text},
+            ]
+            result = chat_completion(messages, config=cfg,
+                                     gateway_key=maas_key_from_settings(settings), json_mode=False)
+            text = (result.payload.get("text") or "").strip()
+            return text or None
         if provider == "gemini":
             payload = {
                 "systemInstruction": {"parts": [{"text": system}]},
