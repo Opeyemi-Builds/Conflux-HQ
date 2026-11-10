@@ -51,3 +51,23 @@ Signature valid/invalid; stale timestamp; malformed body; duplicate delivery; sa
 A Forge smoke path can observe a synthetic transfer lifecycle, receive a verified webhook, retain immutable evidence, safely requery a timeout, derive the current state and expose an investigation-ready timeline. If Forge access is unavailable, complete contract tests with recorded synthetic payloads and document the blocked smoke step.
 
 Do not edit shared router/config/model exports without coordinating with Opeyemi. Do not commit `team10.yml`, `GATEWAY_KEY`, webhook secrets or API responses containing credentials.
+
+## Implementation status — 9 November 2026
+
+The isolated connector slice now includes:
+
+- `backend/app/adapters/xtradot_client.py`: Forge-host-allowlisted transfer lookup and an explicitly caller-supplied requery body. It has no transfer-submission method. Provider errors are sanitized, requests are not retried automatically, timeout becomes `outcome_unknown`, and undocumented statuses remain `unknown`.
+- `backend/app/adapters/xtradot_webhooks.py`: HMAC verification over the exact raw body and timestamp header, plus safe JSON decoding that preserves decimal precision.
+- `backend/app/api/routes/forge_webhooks.py`: bounded raw-body receipt, signature-first verification, five-minute freshness check only when the Forge deployment explicitly configures the timestamp format, duplicate acknowledgement and `ignored` status for unknown event types or missing payload keys. Missing signing-secret configuration returns 503 without persisting an unverified body. Accepted events remain `received` until the shared worker enqueue is integrated.
+- `backend/app/models/xtradot_webhook.py`: raw immutable receipt fields and unique provider/environment/event ID scope.
+- `backend/app/services/payment_evidence.py`: scoped event deduplication helper. Provider status interpretation and transition ordering remain deferred until the status vocabulary is documented.
+- `backend/app/services/xtradot_webhook_worker.py`: bank-scoped processing helper that retains the raw event and does not infer a transfer outcome.
+- `backend/tests/test_xtradot_connector.py`: synthetic contract tests; no live Forge requests.
+
+### Integration still required
+
+This is not yet a deployable end-to-end Forge integration. The route has not been added to the shared API router; the model has not been exported through `app.models`; no Alembic migration has been added; and the receipt worker helper has not been registered in the shared queue dispatcher. Those are Opeyemi-owned shared files and require a coordinated handoff and a unique revision ID before integration. Until then, the HTTP route is not reachable through the application, and the receipt table exists only in isolated test metadata.
+
+The requery request body, timestamp encoding, supported event names, and provider status vocabulary remain deliberately unspecified. Configure `XTRADOT_WEBHOOK_TIMESTAMP_FORMAT` only after confirming the representation (`iso8601` or `unix-seconds`); configure `XTRADOT_SUPPORTED_EVENTS` only with event names confirmed by Forge. Without these deployment settings, signed events are retained as `ignored`, not interpreted. Transfer lookups preserve a returned status string verbatim and always require requery/review because finality is undocumented. Do not use this code to claim a live sandbox connection.
+
+The full backend suite passed at an earlier implementation checkpoint: 97 tests. That run also printed a Windows fatal exception from a background socket/DNS lookup while completing successfully; investigate or rerun that network-dependent test in the Forge environment before treating the run as clean. After the latest status-preservation changes, the focused connector and reconciliation tests passed: 39 tests. The full suite has not been rerun after those final changes.
