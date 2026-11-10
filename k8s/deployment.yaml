@@ -28,7 +28,7 @@ spec:
       containers:
         # Container 1: Next.js Frontend (Gateway Proxy)
         - name: frontend
-          image: ghcr.io/opeyemi-builds/conflux-frontend:sha-latest
+          image: DOCKER_IMAGE_FRONTEND
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
@@ -62,7 +62,7 @@ spec:
 
         # Container 2: FastAPI Backend API Server
         - name: backend
-          image: ghcr.io/opeyemi-builds/conflux-backend:sha-latest
+          image: DOCKER_IMAGE_BACKEND
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
@@ -103,7 +103,7 @@ spec:
 
         # Container 3: Background Queue Worker (MaaS & Investigation Engine)
         - name: worker
-          image: ghcr.io/opeyemi-builds/conflux-backend:sha-latest
+          image: DOCKER_IMAGE_BACKEND
           imagePullPolicy: IfNotPresent
           command: ["python", "-m", "app.services.worker"]
           envFrom:
