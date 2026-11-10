@@ -23,8 +23,10 @@ spec:
         - name: regcred
       volumes:
         - name: data-volume
-          persistentVolumeClaim:
-            claimName: conflux-data-pvc
+          # Temporarily using emptyDir due to Linode CSI billing balance failure on cluster.
+          # Shared between backend & worker containers; zero Linode CSI/billing dependency.
+          # Swap back to persistentVolumeClaim (claimName: conflux-data-pvc) once organizers resolve.
+          emptyDir: {}
       containers:
         # Container 1: Next.js Frontend (Gateway Proxy)
         - name: frontend
