@@ -6,9 +6,11 @@ list (never exposes hashes or tokens), revoke (immediate, idempotent).
 Machine surface (`/machine`, `cfx_api_` bearer): read scope pulls the same
 bank-scoped signal the dashboard reads — analytics summary, incident list and
 overview, complaints feed, investigation runs, corrective actions, connector
-posture, audit trail. operate scope additionally drains the worker queue and
-requests investigations; all POSTs are explicit and audited. No Forge
-GATEWAY_KEY is ever involved, and machine keys never grant bank_admin powers.
+posture, audit trail, plus the versioned `GET /machine/updates` handoff feed
+banks poll to mirror Conflux signal into their own dashboards. operate scope
+additionally drains the worker queue and requests investigations; all POSTs
+are explicit and audited. No Forge GATEWAY_KEY is ever involved, and machine
+keys never grant bank_admin powers.
 """
 import uuid
 
@@ -161,6 +163,64 @@ def machine_actions(incident_id: uuid.UUID, key: MachineReader, db: DbSession):
 @machine.get("/health/connectors", summary="Connector posture and queue health (read scope)")
 def machine_connector_health(key: MachineReader, db: DbSession):
     return remediation.connector_health(db, key.bank_id)
+
+
+@machine.get(
+    "/updates",
+    summary="Versioned handoff feed: changed items since a cursor (read scope)",
+)
+def machine_updates(
+    key: MachineReader,
+    db: DbSession,
+    since: str | None = Query(
+        default=None,
+        description="Opaque cursor from the previous poll (ISO-8601 UTC). Omit for the first pull.",
+    ),
+    limit: int = Query(100, ge=1, le=500),
+    collections: str | None = Query(
+        default=None,
+        description="Comma-separated subset of complaints,incidents,drafts,actions,investigations,audit.",
+    ),
+):
+    """Poll endpoint banks integrate into their own dashboards.
+
+    Recommended cadence is every 5s: the response includes the next cursor,
+    and an empty `items` list means "nothing changed". For a live ticker
+    prefer `?collections=complaints,incidents&limit=20`; the remaining
+    collections (drafts, actions, investigations, audit) change slowly and do
+    not need 5s polling. All rows are bank-scoped to the presenting key;
+    results are ordered by (updated_at, id) and capped at `limit` with
+    `truncated: true` when more remain under the same cursor.
+    """
+    from app.services import handoff_feed as _feed
+
+    try:
+        cursor = _feed.parse_cursor(since)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    wanted: tuple[str, ...] = _feed.COLLECTIONS
+    if collections:
+        picked = tuple(c.strip().lower() for c in collections.split(",") if c.strip())
+        unknown = [c for c in picked if c not in _feed.COLLECTIONS]
+        if unknown:
+            raise HTTPException(422, f"Unknown collections: {', '.join(unknown)}")
+        wanted = picked or _feed.COLLECTIONS
+    result = _feed.handoff_updates(db, bank_id=key.bank_id, since=cursor, limit=limit, collections=wanted)
+    result["poll_interval_seconds"] = 5
+    # At a 5s cadence most polls are empty; only audit polls that carry
+    # signal so the audit trail (which the feed itself excludes) stays lean.
+    if result["count"] or result["truncated"]:
+        log_event(
+            db,
+            bank_id=key.bank_id,
+            actor=f"api_key:{key.key_prefix}",
+            action="machine_updates_polled",
+            entity_type="handoff_feed",
+            entity_id=str(key.bank_id),
+            details={"since": result["since"], "count": result["count"], "truncated": result["truncated"]},
+        )
+        db.commit()
+    return result
 
 
 @machine.get("/audit", summary="Audit trail for the key's bank (read scope)")
