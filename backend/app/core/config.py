@@ -57,6 +57,17 @@ class Settings(BaseSettings):
     gemini_max_retries: int = 1
     gemini_max_attempts: int = 2
 
+    # Huawei MaaS (Forge cluster-internal OpenAI-compatible endpoint). Disabled
+    # without an explicit opt-in; Andrew's slice reads these. GATEWAY_KEY is the
+    # Forge team key, injected at runtime, server-only — never log or expose it.
+    maas_enabled: bool = False
+    maas_base_url: str = "http://huawei-maas.ingress-apisix.svc.cluster.local/openai/v1"
+    maas_model: str = "glm-5.2"  # confirmed listed in the Forge guide; never assume glm-3.5
+    maas_timeout_seconds: float = 20.0
+    maas_max_attempts: int = 1
+    maas_rate_limit_per_minute: int = Field(default=60, ge=1, le=600)
+    gateway_key: str | None = None
+
     spike_bucket_minutes: int = 15
     spike_baseline_hours: int = 24
     spike_mad_multiplier: float = 3.0

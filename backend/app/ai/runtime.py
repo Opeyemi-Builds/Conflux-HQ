@@ -25,11 +25,15 @@ def usage(response) -> tuple[int, int]:
 
 def active_model(settings) -> str:
     provider = settings.ai_provider.lower().strip()
+    if provider == "maas":
+        return getattr(settings, "maas_model", "glm-5.2")
     return settings.gemini_model if provider == "gemini" else settings.anthropic_model
 
 
 def active_key(settings) -> str | None:
     provider = settings.ai_provider.lower().strip()
+    if provider == "maas":
+        return getattr(settings, "gateway_key", None)
     return settings.gemini_api_key if provider == "gemini" else settings.anthropic_api_key
 
 

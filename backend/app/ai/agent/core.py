@@ -61,6 +61,7 @@ def investigate_incident(db: Session, bank_id, incident: Incident, actor: str = 
     incident._ai_input_tokens = telemetry.get("input_tokens", 0)
     incident._ai_output_tokens = telemetry.get("output_tokens", 0)
     incident._evidence = evidence
+    incident._brief = telemetry.get("brief")
     incident._propose_reversal = bool(
         findings.propose_reversal_request
         or (evidence["transactions"].get("matched_complaints", 0) > 0 and evidence["transactions"].get("unreversed_failed", 0) > 0)

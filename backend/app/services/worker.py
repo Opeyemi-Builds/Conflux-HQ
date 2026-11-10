@@ -232,29 +232,36 @@ def _handle_investigate_incident(db: Session, job: Job) -> dict:
             from app.services import remediation as remediation_service
 
             evidence = getattr(incident, "_evidence", {}) or {}
+            brief = getattr(incident, "_brief", None) or {}
             evidence_ids = [
                 item.get("id") for item in evidence.get("events", [])
             ] if isinstance(evidence, dict) else []
             tx_info = evidence.get("transactions", {}) if isinstance(evidence, dict) else {}
-            facts = [
+            facts = list(brief.get("observed_facts", []) or [
                 f"{evidence.get('incident', {}).get('complaint_count', 0)} complaints vs baseline "
                 f"{evidence.get('incident', {}).get('baseline', 0)}",
                 f"{tx_info.get('failed', 0)} failed transactions observed, "
                 f"{tx_info.get('unreversed_failed', 0)} unreversed",
-            ]
+            ])
+            hypotheses = [
+                h.get("statement", str(h)) if isinstance(h, dict) else str(h)
+                for h in (brief.get("hypotheses", []) or [])
+            ] or ([incident.likely_cause] if incident.likely_cause else [])
             remediation_service.complete_investigation_run(
                 db,
                 run_id=uuid.UUID(str(run_id)),
                 model=getattr(incident, "_ai_model", None),
-                provider="auto",
+                provider=getattr(incident, "_ai_source", None) or "auto",
                 prompt_version=getattr(incident, "_ai_prompt_version", None),
                 confidence=incident.cause_confidence,
                 facts=facts,
-                hypotheses=[incident.likely_cause] if incident.likely_cause else [],
-                evidence_ids=evidence_ids,
-                missing_evidence=["payment settlement records"] if not evidence_ids else [],
-                recommended_checks=["verify payment-path logs", "confirm settlement status"],
-                recommended_owner=None,
+                hypotheses=hypotheses,
+                evidence_ids=list(brief.get("supporting_evidence_ids", []) or []) or evidence_ids,
+                missing_evidence=list(brief.get("missing_evidence", []) or []) or (
+                    ["payment settlement records"] if not evidence_ids else []),
+                recommended_checks=list(brief.get("recommended_checks", []) or []) or [
+                    "verify payment-path logs", "confirm settlement status"],
+                recommended_owner=brief.get("recommended_owner"),
             )
         except Exception as exc:
             from app.services import remediation as remediation_service
