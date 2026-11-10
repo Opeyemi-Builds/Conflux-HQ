@@ -1,0 +1,130 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: conflux-app
+  namespace: team10
+  labels:
+    app.kubernetes.io/name: conflux-app
+spec:
+  replicas: 1  # Exactly 1 replica required for SQLite on ReadWriteOnce PVC
+  strategy:
+    type: Recreate  # Prevents multi-pod write locks on volume during rollout
+  selector:
+    matchLabels:
+      app: conflux-app
+  template:
+    metadata:
+      labels:
+        app: conflux-app
+    spec:
+      securityContext:
+        fsGroup: 10001  # Grants non-root container user 10001 write access to /data volume
+      imagePullSecrets:
+        - name: regcred
+      volumes:
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: conflux-data-pvc
+      containers:
+        # Container 1: Next.js Frontend (Gateway Proxy)
+        - name: frontend
+          image: ghcr.io/opeyemi-builds/conflux-frontend:sha-latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+              name: frontend-http
+          env:
+            - name: PORT
+              value: "3000"
+            - name: HOSTNAME
+              value: "0.0.0.0"
+            - name: BACKEND_INTERNAL_URL
+              value: "http://127.0.0.1:8000"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /api/healthz
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /api/healthz
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+        # Container 2: FastAPI Backend API Server
+        - name: backend
+          image: ghcr.io/opeyemi-builds/conflux-backend:sha-latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: backend-http
+          envFrom:
+            - configMapRef:
+                name: conflux-config
+            - secretRef:
+                name: conflux-secrets
+          env:
+            - name: GATEWAY_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: huawei-gateway
+                  key: GATEWAY_KEY
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: data-volume
+              mountPath: /data
+          livenessProbe:
+            httpGet:
+              path: /api/v1/healthz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /api/v1/healthz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+        # Container 3: Background Queue Worker (MaaS & Investigation Engine)
+        - name: worker
+          image: ghcr.io/opeyemi-builds/conflux-backend:sha-latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "app.services.worker"]
+          envFrom:
+            - configMapRef:
+                name: conflux-config
+            - secretRef:
+                name: conflux-secrets
+          env:
+            - name: GATEWAY_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: huawei-gateway
+                  key: GATEWAY_KEY
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: data-volume
+              mountPath: /data
+

@@ -232,29 +232,36 @@ def _handle_investigate_incident(db: Session, job: Job) -> dict:
             from app.services import remediation as remediation_service
 
             evidence = getattr(incident, "_evidence", {}) or {}
+            brief = getattr(incident, "_brief", None) or {}
             evidence_ids = [
                 item.get("id") for item in evidence.get("events", [])
             ] if isinstance(evidence, dict) else []
             tx_info = evidence.get("transactions", {}) if isinstance(evidence, dict) else {}
-            facts = [
+            facts = list(brief.get("observed_facts", []) or [
                 f"{evidence.get('incident', {}).get('complaint_count', 0)} complaints vs baseline "
                 f"{evidence.get('incident', {}).get('baseline', 0)}",
                 f"{tx_info.get('failed', 0)} failed transactions observed, "
                 f"{tx_info.get('unreversed_failed', 0)} unreversed",
-            ]
+            ])
+            hypotheses = [
+                h.get("statement", str(h)) if isinstance(h, dict) else str(h)
+                for h in (brief.get("hypotheses", []) or [])
+            ] or ([incident.likely_cause] if incident.likely_cause else [])
             remediation_service.complete_investigation_run(
                 db,
                 run_id=uuid.UUID(str(run_id)),
                 model=getattr(incident, "_ai_model", None),
-                provider="auto",
+                provider=getattr(incident, "_ai_source", None) or "auto",
                 prompt_version=getattr(incident, "_ai_prompt_version", None),
                 confidence=incident.cause_confidence,
                 facts=facts,
-                hypotheses=[incident.likely_cause] if incident.likely_cause else [],
-                evidence_ids=evidence_ids,
-                missing_evidence=["payment settlement records"] if not evidence_ids else [],
-                recommended_checks=["verify payment-path logs", "confirm settlement status"],
-                recommended_owner=None,
+                hypotheses=hypotheses,
+                evidence_ids=list(brief.get("supporting_evidence_ids", []) or []) or evidence_ids,
+                missing_evidence=list(brief.get("missing_evidence", []) or []) or (
+                    ["payment settlement records"] if not evidence_ids else []),
+                recommended_checks=list(brief.get("recommended_checks", []) or []) or [
+                    "verify payment-path logs", "confirm settlement status"],
+                recommended_owner=brief.get("recommended_owner"),
             )
         except Exception as exc:
             from app.services import remediation as remediation_service
@@ -419,3 +426,43 @@ def drain_jobs(
         "retried": retried,
         "dead_lettered": dead_lettered,
     }
+
+
+def run_worker_loop(poll_interval: float = 1.5) -> None:
+    """Continuously poll and process queued jobs with graceful SIGTERM handling."""
+    import logging
+    import signal
+    import time
+    from app.db.session import SessionLocal
+
+    logger = logging.getLogger("conflux.worker")
+    running = True
+
+    def _handle_exit(signum, frame):
+        nonlocal running
+        logger.info("Worker received shutdown signal (%s), exiting loop...", signum)
+        running = False
+
+    signal.signal(signal.SIGINT, _handle_exit)
+    signal.signal(signal.SIGTERM, _handle_exit)
+
+    logger.info("Conflux background worker started (poll_interval=%.1fs)", poll_interval)
+    while running:
+        try:
+            with SessionLocal() as db:
+                job = process_next_job(db)
+                if job is not None:
+                    logger.info("Processed job %s (kind=%s, status=%s)", job.id, job.kind.value, job.status.value)
+                else:
+                    time.sleep(poll_interval)
+        except Exception as exc:
+            logger.error("Unexpected worker loop error: %s", exc)
+            time.sleep(poll_interval)
+
+    logger.info("Worker loop stopped cleanly.")
+
+
+if __name__ == "__main__":
+    import logging
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    run_worker_loop()

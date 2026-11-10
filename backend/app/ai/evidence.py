@@ -144,7 +144,18 @@ def build_evidence(db: Session, bank_id, incident: Incident) -> dict:
         )
     ).all()
 
+    registry = {
+        "complaints": [{"id": str(c.id), "channel": c.channel.value} for c in incident_complaints],
+        "transactions": [{"id": str(t.id), "reference": t.reference, "status": t.status.value}
+                         for t in transactions],
+        "system_events": [{"id": str(e.id), "type": e.event_type.value,
+                           "component": e.component, "version": e.version} for e in events],
+        "payment_exceptions": [{"id": str(x.id), "exception_type": x.exception_type.value}
+                               for x in exceptions],
+    }
+
     return {
+        "evidence_registry": registry,
         "reconciliation": {
             "exception_count": len(exceptions),
             "by_status": dict(Counter(case.status.value for case in exceptions)),

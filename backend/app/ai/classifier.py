@@ -67,6 +67,30 @@ def classify(text: str, channel: str = "unknown") -> tuple[ClassificationResult,
                            "output_tokens": 0}
         return result, "rules"
 
+    if provider == "maas":
+        from app.ai.providers.classify import classify_with_fallback as _maas_classify
+        from app.ai.providers.rate_limit import RateLimitExceeded, get_limiter
+        from app.ai.providers.settings import maas_active, maas_config_from_settings, maas_key_from_settings
+        cfg = maas_config_from_settings(settings)
+        maas_prompt_id = prompt_version(_PROMPTS / "maas_classify_system.md")
+        try:
+            if not maas_active(settings):
+                raise RateLimitExceeded("maas_disabled")
+            get_limiter(int(settings.maas_rate_limit_per_minute or 60)).acquire()
+            result, source = _maas_classify(
+                text, channel, config=cfg, gateway_key=maas_key_from_settings(settings))
+        except RateLimitExceeded:
+            result, source = rules_classify(text), "rules"
+        if source == "maas":
+            runtime = dict(getattr(result, "_runtime", {}))
+            runtime["prompt_version"] = maas_prompt_id
+            result._runtime = runtime
+        else:
+            result._runtime = {"source": "rules", "model": cfg.model, "prompt_version": maas_prompt_id,
+                               "latency_ms": round((time.monotonic() - started) * 1000), "input_tokens": 0,
+                               "output_tokens": 0}
+        return result, source
+
     system = prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else "Classify the masked bank complaint and call record_classification."
     tool = {"name": "record_classification", "description": "Record one structured complaint classification.",
             "input_schema": ClassificationResult.model_json_schema()}

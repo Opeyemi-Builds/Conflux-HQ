@@ -8,6 +8,12 @@ from app.core.config import get_settings
 router = APIRouter(tags=["health"])
 
 
+@router.get("/healthz")
+def healthz() -> dict:
+    """Lightweight Kubernetes liveness probe. Does NOT touch the database or external APIs."""
+    return {"status": "ok"}
+
+
 @router.get("/health")
 def health(db: DbSession) -> dict:
     db.execute(text("SELECT 1"))
