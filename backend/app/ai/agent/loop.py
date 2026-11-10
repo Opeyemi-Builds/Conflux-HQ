@@ -15,6 +15,50 @@ MAX_STEPS = 8
 PROMPT = Path(__file__).parents[1] / "prompts" / "agent_system.md"
 
 
+def with_registry(evidence: dict) -> dict:
+    """Ensure the evidence bundle carries a citable registry for MaaS briefs.
+
+    Bundles built by ``build_evidence`` already include one; synthetic or
+    inline bundles from tests/tools get a best-effort registry derived from
+    their contents so validation stays strict everywhere.
+    """
+    if isinstance(evidence.get("evidence_registry"), dict):
+        return evidence
+    registry: dict = {"complaints": [], "transactions": [], "system_events": [],
+                      "payment_exceptions": [], "social": []}
+    for key in registry:
+        source_key = "events" if key == "system_events" else key
+        for item in evidence.get(source_key, []) if isinstance(evidence.get(source_key), list) else []:
+            if isinstance(item, dict) and (item.get("id") or item.get("starts_at")):
+                registry[key].append({"id": str(item.get("id") or item.get("starts_at"))})
+    return {**evidence, "evidence_registry": registry}
+
+
+def _brief_to_findings(brief, evidence: dict) -> Findings:
+    """Project Andrew's grounded brief onto the legacy Findings contract."""
+    tx = evidence.get("transactions", {}) if isinstance(evidence, dict) else {}
+    complaints = evidence.get("complaints", {}) if isinstance(evidence, dict) else {}
+    dominant = tx.get("dominant_processor")
+    if not dominant and tx.get("failed_by_processor"):
+        by_proc = tx["failed_by_processor"]
+        dominant = max(by_proc.items(), key=lambda item: item[1])[0] if max(by_proc.values(), default=0) > 0 else None
+    top = brief.hypotheses[0] if brief.hypotheses else None
+    cause = top.statement if top else "Cause not established from available evidence."
+    confidence = top.confidence if top else brief.confidence
+    detail = Evidence(source="baseline", detail="; ".join(brief.observed_facts[:4]) or cause)
+    candidates = [CandidateCause(cause=cause, confidence=confidence, evidence=[detail])]
+    return Findings(
+        headline=cause,
+        candidate_causes=candidates,
+        affected_channels=list(complaints.get("channels", {})) if isinstance(complaints, dict) else [],
+        affected_switch=dominant,
+        matched_transactions=int(tx.get("failed", 0) or 0),
+        propose_reversal_request=False,
+        recommended_action="; ".join(brief.recommended_checks[:3]) or
+        "Verify payment-path logs and assign an incident owner. No money movement is authorized.",
+    )
+
+
 def fallback_findings(evidence: dict) -> Findings:
     incident = evidence["incident"]
     tx = evidence.get("transactions", {})
@@ -77,6 +121,33 @@ def run_investigation_loop(evidence: dict, audit=None) -> tuple[Findings, str, l
 
     input_tokens = output_tokens = 0
     provider = settings.ai_provider.lower().strip()
+    if provider == "maas":
+        from app.ai.investigation import investigate_with_fallback as _maas_investigate
+        from app.ai.providers.rate_limit import RateLimitExceeded, get_limiter
+        from app.ai.providers.settings import maas_active, maas_config_from_settings, maas_key_from_settings
+        try:
+            if not maas_active(settings):
+                raise RateLimitExceeded("maas_disabled")
+            get_limiter(int(settings.maas_rate_limit_per_minute or 60)).acquire()
+            brief, source, telemetry = _maas_investigate(
+                with_registry(evidence),
+                config=maas_config_from_settings(settings),
+                gateway_key=maas_key_from_settings(settings),
+            )
+            input_tokens = telemetry.get("input_tokens", 0)
+            output_tokens = telemetry.get("output_tokens", 0)
+            entry = {"step": 1, "tool": "maas_investigate", "input": "evidence_bundle",
+                     "output": {"source": source, "confidence": brief.confidence}}
+            trace.append(entry)
+            if audit:
+                audit(entry)
+            result = finish(_brief_to_findings(brief, evidence), source)
+            # Stash the grounded brief on the telemetry entry so core/worker can
+            # persist facts/hypotheses/checks without a second model call.
+            trace[-1]["brief"] = brief.model_dump()
+            return result
+        except RateLimitExceeded:
+            return finish(fallback_findings(evidence), "rules")
     configured_key = settings.gemini_api_key if provider == "gemini" else settings.anthropic_api_key
     if not configured_key:
         return finish(fallback_findings(evidence), "rules")
