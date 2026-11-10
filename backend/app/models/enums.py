@@ -159,6 +159,7 @@ class JobKind(str, enum.Enum):
     INVESTIGATE_INCIDENT = "investigate_incident"
     DISPATCH_APPROVAL = "dispatch_approval"
     SYNC_SOCIAL_RULES = "sync_social_rules"
+    PROCESS_XTRADOT_WEBHOOK = "process_xtradot_webhook"
 
 
 class JobStatus(str, enum.Enum):

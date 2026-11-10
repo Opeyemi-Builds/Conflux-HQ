@@ -313,6 +313,23 @@ def _handle_sync_social_rules(db: Session, job: Job) -> dict:
     return sync_stream_rules(db, actor="worker")
 
 
+def _handle_process_xtradot_webhook(db: Session, job: Job) -> dict:
+    from app.services.xtradot_webhook_worker import process_xtradot_webhook_receipt
+
+    receipt_id = uuid.UUID(str(job.payload["receipt_id"]))
+    result = process_xtradot_webhook_receipt(db, receipt_id=receipt_id, bank_id=job.bank_id)
+    log_event(
+        db,
+        bank_id=job.bank_id,
+        actor="worker",
+        action="xtradot_webhook_processed",
+        entity_type="xtradot_webhook_receipt",
+        entity_id=str(receipt_id),
+        details={"status": result.get("status"), "duplicate": result.get("duplicate", False)},
+    )
+    return result
+
+
 def _execute_job(db: Session, job: Job) -> dict:
     if job.payload.get("simulate_failure"):
         raise RuntimeError("Simulated worker failure for dead-letter testing")
@@ -326,6 +343,8 @@ def _execute_job(db: Session, job: Job) -> dict:
         return _handle_dispatch_approval(db, job)
     if job.kind == JobKind.SYNC_SOCIAL_RULES:
         return _handle_sync_social_rules(db, job)
+    if job.kind == JobKind.PROCESS_XTRADOT_WEBHOOK:
+        return _handle_process_xtradot_webhook(db, job)
     raise ValueError(f"Unsupported job kind: {job.kind}")
 
 

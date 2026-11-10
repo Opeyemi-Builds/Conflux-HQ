@@ -10,6 +10,7 @@ from app.models.social import BankAlias, SocialReceipt
 from app.models.payment_exception import PaymentException
 from app.models.payment_proposal import PaymentProposal
 from app.models.remediation import CorrectiveAction, InvestigationRun
+from app.models.xtradot_webhook import XtradotWebhookReceipt
 
 __all__ = [
     "AuditLog",
@@ -29,4 +30,5 @@ __all__ = [
     "SocialReceipt",
     "SystemEvent",
     "Transaction",
+    "XtradotWebhookReceipt",
 ]

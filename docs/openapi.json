@@ -2612,6 +2612,90 @@
         ]
       }
     },
+    "/api/v1/forge/webhooks": {
+      "post": {
+        "tags": [
+          "forge webhooks"
+        ],
+        "summary": "Receive Xtradot Webhook",
+        "description": "Verify and durably retain the raw receipt; business processing is asynchronous.",
+        "operationId": "receive_xtradot_webhook_api_v1_forge_webhooks_post",
+        "parameters": [
+          {
+            "name": "x-forge-timestamp",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Forge-Timestamp"
+            }
+          },
+          {
+            "name": "x-forge-signature",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Forge-Signature"
+            }
+          },
+          {
+            "name": "x-forge-event",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Forge-Event"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Receive Xtradot Webhook Api V1 Forge Webhooks Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/social/monitoring-rules": {
       "get": {
         "tags": [
@@ -5839,7 +5923,8 @@
           "detect_spikes",
           "investigate_incident",
           "dispatch_approval",
-          "sync_social_rules"
+          "sync_social_rules",
+          "process_xtradot_webhook"
         ],
         "title": "JobKind"
       },

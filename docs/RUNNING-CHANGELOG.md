@@ -8,7 +8,8 @@ This is an active, running reference documenting **cross-cutting changes** that 
 
 | Area | Change | Who It Affects | Action Required |
 |---|---|---|---|
-| **Alembic Head** | Head is now `0010_remediation` (revises `0009_bank_ingestion`) | **Opeyemi**, all developers | Base any new migrations on `0010_remediation` |
+| **Alembic Head** | Head is now `0011_xtradot_webhooks` (revises `0010_remediation`) | **Opeyemi**, all developers | Base any new migrations on `0011_xtradot_webhooks` |
+| **XtraDot Evidence** | New `xtradot_webhook_receipts` table + `POST /forge/webhooks` (signed, 202/duplicate/ignored) + `PROCESS_XTRADOT_WEBHOOK` job wired in worker | **Adfola**, **Opeyemi**, **Frontend** | Sandbox-only; no transfer submission; statuses are observations, not ledger proof. Deploy config: `GATEWAY_KEY`, `XTRADOT_WEBHOOK_SECRET`, `XTRADOT_BANK_ID`, `XTRADOT_SUPPORTED_EVENTS`, `XTRADOT_WEBHOOK_TIMESTAMP_FORMAT` (Forge only) |
 | **Corrective Actions** | New `corrective_actions` table + `POST/PATCH /incidents/{id}/actions`, `PATCH /actions/{id}` | **Frontend**, **Opeyemi** | Render action lifecycle `proposed→accepted→in_progress→monitoring→verified`; `verified` needs bank_admin + validation evidence |
 | **Investigation Runs** | New `investigation_runs` table + `POST /investigations`, `GET /incidents/{id}/investigations`, `GET /investigations/{id}` | **Andrew**, **Frontend**, **Opeyemi** | GETs never queue jobs; runs persist facts/hypotheses/evidence IDs after drain |
 | **Incident Overview** | New `GET /incidents/{id}/overview` single payload (complaints, social corroboration, payment evidence, latest run, actions) | **Frontend** | Use for incident detail view; social counts are triage-only, not proof |
