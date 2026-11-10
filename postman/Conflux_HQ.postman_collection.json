@@ -1,0 +1,1516 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+    "name": "Conflux HQ API",
+    "description": "Complete interactive Postman collection for Conflux HQ (Theme 1: AI Complaint Intelligence & Payment Reconciliation). Supports Local (127.0.0.1:8000), Local Dual Port-Forward (localhost:3000), and Forge Kubernetes Cluster (team10.xtradot.co). Includes automated token cascading, HMAC-SHA256 signature generation, and assertion test scripts.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00. Health & Probes",
+      "item": [
+        {
+          "name": "00.1 Liveness Probe (healthz)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/healthz",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "healthz"
+              ]
+            },
+            "description": "Lightweight, zero-database Kubernetes liveness check."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Liveness is ok', function () { pm.expect(pm.response.json().status).to.eql('ok'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "00.2 Deep Health & Database (health)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "health"
+              ]
+            },
+            "description": "Deep readiness check verifying active database connection."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Database connected', function () { pm.expect(pm.response.json().database).to.eql('connected'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "00.3 Connector Health Matrix",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/health/connectors",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "health",
+                "connectors"
+              ]
+            },
+            "description": "Full integration health matrix: database, worker queue, intake connectors, social adapter, MaaS investigation, and payment evidence states."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Providers reported', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('providers');",
+                  "    pm.expect(body.providers).to.have.property('database');",
+                  "    pm.expect(body.providers).to.have.property('worker_queue');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01. Authentication & Machine Keys",
+      "item": [
+        {
+          "name": "01.1 Demo Login - Zymic Bank",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{demo_username}}\",\n  \"password\": \"{{demo_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login as Bank Admin for Zymic Bank demo account. Automatically captures `jwt_token` and `bank_id`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "pm.environment.set('jwt_token', data.access_token);",
+                  "pm.environment.set('bank_id', data.user.bank_id);",
+                  "console.log('JWT Token saved:', data.access_token.substring(0, 15) + '...');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "01.2 Provision Machine API Key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Core Banking Automation\",\n  \"scopes\": [\"read\", \"operate\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/api-keys",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "api-keys"
+              ]
+            },
+            "description": "Bank-admin generation of programmatic API key (cfx_api_...). Automatically captures `machine_api_key`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 201 Created', function () { pm.response.to.have.status(201); });",
+                  "const data = pm.response.json();",
+                  "pm.environment.set('machine_api_key', data.token);",
+                  "pm.environment.set('machine_api_key_id', data.id);",
+                  "console.log('Machine key saved:', data.token.substring(0, 16) + '...');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "01.3 List Machine API Keys",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/api-keys",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "api-keys"
+              ]
+            },
+            "description": "List all active machine keys for the bank tenant."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Keys array returned', function () { pm.expect(pm.response.json()).to.be.an('array'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "01.4 Test Machine Key Dual-Auth",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{machine_api_key}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/health/connectors",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "health",
+                "connectors"
+              ]
+            },
+            "description": "Verifies that machine API key (cfx_api_...) authenticates successfully via BankActor dependency."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK with Machine Key', function () { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "01.5 Revoke Machine API Key",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/api-keys/{{machine_api_key_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "api-keys",
+                "{{machine_api_key_id}}"
+              ]
+            },
+            "description": "Immediately revokes a machine key. Subsequent calls with this key return 401."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 204 No Content', function () { pm.response.to.have.status(204); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02. Bank Complaint Ingestion & Deduplication",
+      "item": [
+        {
+          "name": "02.1 Provision Ingestion Connector",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Core Banking CRM Channel\",\n  \"channel\": \"in_app\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/ingestion/connectors",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ingestion",
+                "connectors"
+              ]
+            },
+            "description": "Creates bank-bound connector token (cfx_conn_...). Automatically captures `connector_token`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 201 Created', function () { pm.response.to.have.status(201); });",
+                  "const data = pm.response.json();",
+                  "pm.environment.set('connector_token', data.token);",
+                  "pm.environment.set('connector_id', data.id);",
+                  "console.log('Connector token saved:', data.token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "02.2 List Ingestion Connectors",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/ingestion/connectors",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ingestion",
+                "connectors"
+              ]
+            },
+            "description": "Lists provisioned intake connectors."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "02.3 Ingest Complaint with PII & .02 Trigger",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{connector_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_system\": \"CRM\",\n  \"external_id\": \"TICKET-PM-001\",\n  \"channel\": \"in_app\",\n  \"occurred_at\": \"2026-11-10T14:30:00Z\",\n  \"text\": \"My phone is 08031234567, account 0123456789. I transferred 25000.02 and got debited but recipient never saw alert!\",\n  \"amount\": \"25000.02\",\n  \"currency\": \"NGN\",\n  \"customer_ref\": \"adaeze_okonkwo\",\n  \"payment_reference\": \"TXN-FORGE-02-REF\",\n  \"region\": \"Lagos\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/ingestion/complaints",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ingestion",
+                "complaints"
+              ]
+            },
+            "description": "Submits complaint with raw PII (phone/account) and .02 Forge trigger amount. Returns 202 Accepted and queues classification job."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 202 Accepted', function () { pm.response.to.have.status(202); });",
+                  "const data = pm.response.json();",
+                  "pm.expect(data.duplicate).to.eql(false);",
+                  "pm.environment.set('complaint_id', data.complaint_id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "02.4 Test Idempotent Duplicate Ingestion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{connector_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_system\": \"CRM\",\n  \"external_id\": \"TICKET-PM-001\",\n  \"channel\": \"in_app\",\n  \"occurred_at\": \"2026-11-10T14:30:00Z\",\n  \"text\": \"My phone is 08031234567, account 0123456789. I transferred 25000.02 and got debited but recipient never saw alert!\",\n  \"amount\": \"25000.02\",\n  \"currency\": \"NGN\",\n  \"customer_ref\": \"adaeze_okonkwo\",\n  \"payment_reference\": \"TXN-FORGE-02-REF\",\n  \"region\": \"Lagos\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/ingestion/complaints",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ingestion",
+                "complaints"
+              ]
+            },
+            "description": "Re-sends the exact same ticket payload. Returns 200 OK duplicate: true without creating a duplicate job."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK Duplicate', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "pm.expect(data.duplicate).to.eql(true);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "02.5 Test Payload Drift Conflict (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{connector_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_system\": \"CRM\",\n  \"external_id\": \"TICKET-PM-001\",\n  \"channel\": \"in_app\",\n  \"occurred_at\": \"2026-11-10T14:30:00Z\",\n  \"text\": \"Altered text: I was charged a completely different fee!\",\n  \"amount\": \"25000.02\",\n  \"currency\": \"NGN\",\n  \"customer_ref\": \"adaeze_okonkwo\",\n  \"payment_reference\": \"TXN-FORGE-02-REF\",\n  \"region\": \"Lagos\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/ingestion/complaints",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ingestion",
+                "complaints"
+              ]
+            },
+            "description": "Re-sends same external_id with altered text. Expects 409 Conflict."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 409 Conflict', function () { pm.response.to.have.status(409); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "02.6 List Complaint Receipts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/ingestion/receipts?payment_reference=TXN-FORGE-02-REF",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ingestion",
+                "receipts"
+              ],
+              "query": [
+                {
+                  "key": "payment_reference",
+                  "value": "TXN-FORGE-02-REF"
+                }
+              ]
+            },
+            "description": "Queries immutable provenance audit receipts by payment reference."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Receipts found', function () { pm.expect(pm.response.json().length).to.be.at.least(1); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03. Complaints Feed & Analytics",
+      "item": [
+        {
+          "name": "03.1 List Filtered Complaints",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/complaints?channel=in_app",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "complaints"
+              ],
+              "query": [
+                {
+                  "key": "channel",
+                  "value": "in_app"
+                }
+              ]
+            },
+            "description": "Lists customer complaints with NDPR-masked text and pseudonymized customer IDs."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const list = pm.response.json();",
+                  "if (list.length > 0) { pm.environment.set('complaint_id', list[0].id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "03.2 Get Complaint Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/complaints/{{complaint_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "complaints",
+                "{{complaint_id}}"
+              ]
+            },
+            "description": "Inspects single complaint, confirming PII is redacted ([PHONE], [ACCOUNT])."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "pm.test('PII is redacted', function () {",
+                  "    pm.expect(data.text).to.include('[PHONE]');",
+                  "    pm.expect(data.text).to.include('[ACCOUNT]');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "03.3 Complaints Analytics Breakdown",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/analytics/breakdown",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "analytics",
+                "breakdown"
+              ]
+            },
+            "description": "Breakdown of complaints by channel, issue type, and sentiment."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "03.4 Complaints Analytics Trends",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/analytics/trends?hours=24",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "analytics",
+                "trends"
+              ],
+              "query": [
+                {
+                  "key": "hours",
+                  "value": "24"
+                }
+              ]
+            },
+            "description": "Hourly complaint volume trends for spike tracking."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04. Social Intelligence Intake",
+      "item": [
+        {
+          "name": "04.1 Ingest Social Post Event",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"external_id\": \"x-post-90210\",\n  \"text\": \"@ZymicBank your mobile app has been failing transfers for 2 hours! Fix your network!\",\n  \"author_id\": \"usr_88219\",\n  \"occurred_at\": \"2026-11-10T14:35:00Z\",\n  \"metrics\": {\"likes\": 45, \"retweets\": 12}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/social/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "social",
+                "events"
+              ]
+            },
+            "description": "Ingests a synthetic social media mention into the bank stream."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 202 Accepted or 200 OK', function () { pm.expect(pm.response.code).to.be.oneOf([200, 202]); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05. XtraDot Payment Webhook Receiver",
+      "item": [
+        {
+          "name": "05.1 Send Signed Transfer Webhook (Auto HMAC)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"evt_forge_transfer_fail_02\",\n  \"event_type\": \"transfer.failed\",\n  \"reference\": \"TXN-FORGE-02-REF\",\n  \"amount\": \"25000.02\",\n  \"currency\": \"NGN\",\n  \"reason\": \"Switch timeout after 30 seconds (Forge trigger .02)\",\n  \"session_id\": \"sess_xtradot_99182\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/forge/webhooks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forge",
+                "webhooks"
+              ]
+            },
+            "description": "Sends signed XtraDot payment event. Pre-request script dynamically computes HMAC-SHA256 signature using `xtradot_webhook_secret`."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const secret = pm.environment.get('xtradot_webhook_secret') || 'whsec_placeholder_temp_until_registered';",
+                  "const timestamp = Math.floor(Date.now() / 1000).toString();",
+                  "const body = pm.request.body.raw;",
+                  "const payload = `${timestamp}.${body}`;",
+                  "const signature = CryptoJS.HmacSHA256(payload, secret).toString(CryptoJS.enc.Hex);",
+                  "pm.request.headers.add({ key: 'x-forge-timestamp', value: timestamp });",
+                  "pm.request.headers.add({ key: 'x-forge-signature', value: signature });",
+                  "pm.request.headers.add({ key: 'x-forge-event', value: 'transfer.failed' });"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 202 Accepted', function () { pm.response.to.have.status(202); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "05.2 Test Invalid Webhook Signature Rejection",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "x-forge-timestamp",
+                "value": "1731249600",
+                "type": "text"
+              },
+              {
+                "key": "x-forge-signature",
+                "value": "bogus_invalid_signature_hex_digest",
+                "type": "text"
+              },
+              {
+                "key": "x-forge-event",
+                "value": "transfer.failed",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"evt_forge_tampered_01\",\n  \"event_type\": \"transfer.failed\",\n  \"reference\": \"TXN-TAMPERED-REF\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/forge/webhooks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forge",
+                "webhooks"
+              ]
+            },
+            "description": "Attempts intake with forged signature. Expects 401 Unauthorized."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 401 Unauthorized', function () { pm.response.to.have.status(401); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06. Incidents & Grounded MaaS Investigation",
+      "item": [
+        {
+          "name": "06.1 Detect Spikes (15-min MAD)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/incidents/detect",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "incidents",
+                "detect"
+              ]
+            },
+            "description": "Runs deterministic Median Absolute Deviation anomaly detection against complaint volume."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "06.2 List Incidents",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/incidents",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "incidents"
+              ]
+            },
+            "description": "Lists active incidents. Automatically captures `incident_id`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const list = pm.response.json();",
+                  "if (list.length > 0) {",
+                  "    pm.environment.set('incident_id', list[0].id);",
+                  "    console.log('Incident ID saved:', list[0].id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "06.3 Unified Incident Overview",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/incidents/{{incident_id}}/overview",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "incidents",
+                "{{incident_id}}",
+                "overview"
+              ]
+            },
+            "description": "Returns single payload containing timeline, linked complaints, investigation brief, corrective actions, and audit trail."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "pm.expect(data).to.have.property('incident');",
+                  "pm.expect(data).to.have.property('summary');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "06.4 Trigger Grounded MaaS Investigation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/incidents/{{incident_id}}/investigate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "incidents",
+                "{{incident_id}}",
+                "investigate"
+              ]
+            },
+            "description": "Explicit operator trigger queuing MaaS investigation job. Captures `run_id`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK or 202 Accepted', function () { pm.expect(pm.response.code).to.be.oneOf([200, 202]); });",
+                  "const data = pm.response.json();",
+                  "if (data.run_id) { pm.environment.set('run_id', data.run_id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07. Corrective Action Governance Lifecycle",
+      "item": [
+        {
+          "name": "07.1 Propose Corrective Action",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Restart Interbank Payment Gateway Connector\",\n  \"description\": \"Payment switch timed out on .02 transfers; restart connection pool.\",\n  \"owner\": \"devops-lead\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/incidents/{{incident_id}}/corrective-actions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "incidents",
+                "{{incident_id}}",
+                "corrective-actions"
+              ]
+            },
+            "description": "Proposes remediation plan in `proposed` state. Captures `ca_id`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 201 Created', function () { pm.response.to.have.status(201); });",
+                  "const data = pm.response.json();",
+                  "pm.expect(data.status).to.eql('proposed');",
+                  "pm.environment.set('ca_id', data.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "07.2 Advance to In Progress",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"in_progress\",\n  \"change_reference\": \"CHG-FORGE-9021\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/corrective-actions/{{ca_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "corrective-actions",
+                "{{ca_id}}"
+              ]
+            },
+            "description": "Advances action status to `in_progress` with change reference."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "pm.expect(pm.response.json().status).to.eql('in_progress');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "07.3 Attempt Verify Without Evidence (Expect 400)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"verified\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/corrective-actions/{{ca_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "corrective-actions",
+                "{{ca_id}}"
+              ]
+            },
+            "description": "Attempts verification without validation evidence. Enforces tamper-proof rule: expects 400 Bad Request."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 400 Bad Request', function () { pm.response.to.have.status(400); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "07.4 Verify With Evidence as Bank Admin",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"verified\",\n  \"validation_observation\": \"Gateway connection pool restarted; transfer success rate returned to 99.8% over 15 minutes of observation.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/corrective-actions/{{ca_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "corrective-actions",
+                "{{ca_id}}"
+              ]
+            },
+            "description": "Validates and closes corrective action with documented evidence."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK Verified', function () { pm.response.to.have.status(200); });",
+                  "pm.expect(pm.response.json().status).to.eql('verified');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "08. Payment Reconciliation & Proposals",
+      "item": [
+        {
+          "name": "08.1 List Payment Exceptions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/reconciliation/exceptions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "reconciliation",
+                "exceptions"
+              ]
+            },
+            "description": "Lists transaction exceptions (e.g., customer debited but transfer timed out or unreversed)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "08.2 List Reversal Proposals",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/reconciliation/proposals",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "reconciliation",
+                "proposals"
+              ]
+            },
+            "description": "Lists human-review reversal proposals. Captures `proposal_id`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const list = pm.response.json();",
+                  "if (list.length > 0) { pm.environment.set('proposal_id', list[0].id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "08.3 Accept Reversal Proposal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/reconciliation/proposals/{{proposal_id}}/accept",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "reconciliation",
+                "proposals",
+                "{{proposal_id}}",
+                "accept"
+              ]
+            },
+            "description": "Human approval of a reversal proposal. Demonstrates review-only governance (zero automated money movement)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK or 404', function () { pm.expect(pm.response.code).to.be.oneOf([200, 404]); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "09. Synthetic Scenario Seeding & Demo",
+      "item": [
+        {
+          "name": "09.1 Seed 48-Hour Incident Scenario",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hours\": 48\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/synthetic/seed",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "synthetic",
+                "seed"
+              ]
+            },
+            "description": "Seeds a complete 48-hour synthetic scenario with release events, failed transfer spikes, and transactions."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "09.2 Reset Bank State",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/synthetic/reset",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "synthetic",
+                "reset"
+              ]
+            },
+            "description": "Cleanses all synthetic test data for the bank tenant in FK-safe order."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
