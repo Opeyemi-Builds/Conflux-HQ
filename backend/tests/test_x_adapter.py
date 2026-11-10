@@ -150,6 +150,9 @@ def test_live_x_api_v2_sync_and_recent_search_pull(monkeypatch):
 
     client, sessions, engine = setup(monkeypatch)
     try:
+        # Explicitly ensure x_bearer_token is None for the first step
+        monkeypatch.setattr(get_settings(), "x_bearer_token", None)
+
         # 1. Without X_BEARER_TOKEN, /social/x/pull returns an explicit error by default (no silent fake fallback)
         no_token = client.post(
             "/api/v1/social/x/pull",

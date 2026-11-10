@@ -22,6 +22,7 @@ def setup(monkeypatch):
     monkeypatch.setattr(settings, "demo_mode", True)
     monkeypatch.setattr(settings, "demo_token_secret", SECRET)
     monkeypatch.setattr(settings, "social_adapter_token", ADAPTER)
+    monkeypatch.setattr(settings, "x_bearer_token", None)
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     sessions = sessionmaker(bind=engine, expire_on_commit=False)

@@ -20,6 +20,7 @@ def build_complaint(bank_id: uuid.UUID, data: ComplaintCreate) -> Complaint:
         channel=data.channel,
         text=mask_pii(data.text),
         customer_ref=pseudonymise(data.customer_ref),
+        payment_reference=getattr(data, "payment_reference", None),
         region=data.region,
         language=data.language,
         occurred_at=data.occurred_at or utcnow(),

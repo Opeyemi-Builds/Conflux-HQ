@@ -34,5 +34,8 @@ class Complaint(Base):
     classification_confidence: Mapped[float | None] = mapped_column(Float)
     classified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # Correlation to payment reference (XtraDot sandbox or core banking)
+    payment_reference: Mapped[str | None] = mapped_column(String(64), index=True)
+
     transaction_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("transactions.id"), index=True)
     incident_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("incidents.id"), index=True)
