@@ -45,7 +45,7 @@ kubectl apply -f k8s/configmap.yaml -n "$NAMESPACE"
 kubectl apply -f k8s/service.yaml -n "$NAMESPACE"
 
 # 4. Generate deployment with real image tags and apply
-echo "--> [5/5] Deploying 3-container pod (frontend, backend, worker)..."
+echo "--> [5/5] Deploying pod (frontend, backend + embedded worker)..."
 sed -e "s|DOCKER_IMAGE_FRONTEND|${FRONTEND_IMAGE}|g" \
     -e "s|DOCKER_IMAGE_BACKEND|${BACKEND_IMAGE}|g" \
     k8s/deployment.yaml | kubectl apply -f - -n "$NAMESPACE"

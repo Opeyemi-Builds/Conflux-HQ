@@ -24,7 +24,7 @@ spec:
       volumes:
         - name: data-volume
           # Temporarily using emptyDir due to Linode CSI billing balance failure on cluster.
-          # Shared between backend & worker containers; zero Linode CSI/billing dependency.
+          # Zero Linode CSI/billing dependency.
           # Swap back to persistentVolumeClaim (claimName: conflux-data-pvc) once organizers resolve.
           emptyDir: {}
       containers:
@@ -44,11 +44,11 @@ spec:
               value: "http://127.0.0.1:8000"
           resources:
             requests:
-              cpu: 100m
-              memory: 256Mi
+              cpu: 50m
+              memory: 64Mi
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: 250m
+              memory: 256Mi
           livenessProbe:
             httpGet:
               path: /api/healthz
@@ -62,7 +62,7 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
 
-        # Container 2: FastAPI Backend API Server
+        # Container 2: FastAPI Backend API Server + Embedded Worker Engine
         - name: backend
           image: DOCKER_IMAGE_BACKEND
           imagePullPolicy: IfNotPresent
@@ -80,13 +80,15 @@ spec:
                 secretKeyRef:
                   name: huawei-gateway
                   key: GATEWAY_KEY
+            - name: RUN_EMBEDDED_WORKER
+              value: "true"
           resources:
             requests:
-              cpu: 100m
-              memory: 192Mi
+              cpu: 50m
+              memory: 64Mi
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: 250m
+              memory: 256Mi
           volumeMounts:
             - name: data-volume
               mountPath: /data
@@ -102,31 +104,3 @@ spec:
               port: 8000
             initialDelaySeconds: 5
             periodSeconds: 10
-
-        # Container 3: Background Queue Worker (MaaS & Investigation Engine)
-        - name: worker
-          image: DOCKER_IMAGE_BACKEND
-          imagePullPolicy: IfNotPresent
-          command: ["python", "-m", "app.services.worker"]
-          envFrom:
-            - configMapRef:
-                name: conflux-config
-            - secretRef:
-                name: conflux-secrets
-          env:
-            - name: GATEWAY_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: huawei-gateway
-                  key: GATEWAY_KEY
-          resources:
-            requests:
-              cpu: 100m
-              memory: 192Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
-          volumeMounts:
-            - name: data-volume
-              mountPath: /data
-
