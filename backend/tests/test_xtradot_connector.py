@@ -13,7 +13,7 @@ from app.adapters.xtradot_client import (
     XtradotClient,
     XtradotConfigurationError,
 )
-from app.adapters.xtradot_schemas import PaymentEvidenceEvent
+from app.adapters.xtradot_schemas import PaymentEvidenceEvent, ReportEvidenceEvent
 from app.adapters.xtradot_webhooks import (
     WebhookVerificationError,
     decode_webhook_body,
@@ -35,7 +35,10 @@ from app.services.payment_evidence import (
     append_unique_events,
     event_deduplication_key,
 )
-from app.services.xtradot_webhook_worker import process_xtradot_webhook_receipt
+from app.services.xtradot_webhook_worker import (
+    normalize_receipt_report_event,
+    process_xtradot_webhook_receipt,
+)
 
 
 INTERNAL_BASE = "http://bank-api.ingress-apisix.svc.cluster.local/v1"
@@ -341,7 +344,10 @@ def test_duplicate_events_are_ignored_and_scope_includes_tenant():
         append_unique_events([first], [replay])
 
 
-def make_webhook_client(monkeypatch, *, secret="webhook-secret", event_types="transfer.successful,transfer.failed,transfer.pending,transfer.reversed"):
+REPORT_EVENTS = "transfer.successful,transfer.failed,transfer.pending,transfer.reversed,report.ready,report.updated"
+
+
+def make_webhook_client(monkeypatch, *, secret="webhook-secret", event_types=REPORT_EVENTS):
     bank_id = uuid.uuid4()
     monkeypatch.setenv("XTRADOT_WEBHOOK_SECRET", secret)
     monkeypatch.setenv("XTRADOT_BANK_ID", str(bank_id))
@@ -666,6 +672,168 @@ def test_worker_ignores_header_body_event_mismatch(monkeypatch):
     finally:
         client.close()
         engine.dispose()
+
+
+def test_worker_normalizes_documented_report_event(monkeypatch):
+    """A v2-style report.ready body normalizes to one report evidence event; raw stays intact."""
+    client, sessions, engine, bank_id = make_webhook_client(monkeypatch)
+    try:
+        body = (
+            b'{"event":"report.ready","event_id":"rpt-evt-0001",'
+            b'"created_at":"2026-11-09T11:42:05Z","attempt":1,'
+            b'"data":{"report_id":"RPT-0001","report_type":"settlement","status":"ready",'
+            b'"period_from":"2026-11-08T00:00:00Z","period_to":"2026-11-09T00:00:00Z",'
+            b'"payment_references":["TRF-1","TRF-2"]}}'
+        )
+        response = client.post(
+            "/api/v1/forge/webhooks",
+            content=body,
+            headers=signed_headers(body, event_type="report.ready"),
+        )
+        assert response.status_code == 202, response.text
+        assert response.json()["status"] == "received"
+        receipt_id = uuid.UUID(response.json()["receipt_id"])
+        with sessions() as db:
+            processed = process_xtradot_webhook_receipt(
+                db, receipt_id=receipt_id, bank_id=bank_id
+            )
+            assert processed["status"] == "processed"
+            evidence = processed["evidence"]
+            assert evidence["report_id"] == "RPT-0001"
+            assert evidence["report_type"] == "settlement"
+            assert evidence["event_type"] == "report.ready"
+            assert evidence["source_status"] == "ready"
+            assert evidence["payment_references"] == ["TRF-1", "TRF-2"]
+            assert evidence["bank_id"] == str(bank_id)
+        with sessions() as db:
+            from app.models.xtradot_webhook import XtradotWebhookReceipt
+
+            receipt = db.get(XtradotWebhookReceipt, receipt_id)
+            assert receipt.raw_body == body  # verbatim raw evidence is retained
+            assert receipt.status == "processed"
+            assert receipt.processed_at is not None
+    finally:
+        client.close()
+        engine.dispose()
+
+
+def test_report_update_arrives_as_new_snapshot_not_overwrite(monkeypatch):
+    """report.updated for the same report_id is a new row under a new event_id."""
+    client, sessions, engine, bank_id = make_webhook_client(monkeypatch)
+    try:
+        ready_body = (
+            b'{"event":"report.ready","event_id":"rpt-evt-0001",'
+            b'"created_at":"2026-11-09T12:00:00Z",'
+            b'"data":{"report_id":"RPT-0001","report_type":"settlement","status":"ready"}}'
+        )
+        updated_body = (
+            b'{"event":"report.updated","event_id":"rpt-evt-0002",'
+            b'"created_at":"2026-11-09T13:00:00Z",'
+            b'"data":{"report_id":"RPT-0001","report_type":"settlement","status":"updated"}}'
+        )
+        ready_id = uuid.UUID(
+            client.post(
+                "/api/v1/forge/webhooks",
+                content=ready_body,
+                headers=signed_headers(ready_body, event_type="report.ready"),
+            ).json()["receipt_id"]
+        )
+        updated_id = uuid.UUID(
+            client.post(
+                "/api/v1/forge/webhooks",
+                content=updated_body,
+                headers=signed_headers(updated_body, event_type="report.updated"),
+            ).json()["receipt_id"]
+        )
+        with sessions() as db:
+            ready = process_xtradot_webhook_receipt(
+                db, receipt_id=ready_id, bank_id=bank_id
+            )
+            updated = process_xtradot_webhook_receipt(
+                db, receipt_id=updated_id, bank_id=bank_id
+            )
+            assert ready["status"] == "processed"
+            assert updated["status"] == "processed"
+            assert ready["evidence"]["provider_event_id"] == "rpt-evt-0001"
+            assert updated["evidence"]["provider_event_id"] == "rpt-evt-0002"
+            assert updated["evidence"]["report_id"] == ready["evidence"]["report_id"]
+        with sessions() as db:
+            receipts = db.scalars(select(XtradotWebhookReceipt)).all()
+            assert len(receipts) == 2
+            assert {r.status for r in receipts} == {"processed"}
+    finally:
+        client.close()
+        engine.dispose()
+
+
+def test_worker_ignores_report_header_body_mismatch(monkeypatch):
+    client, sessions, engine, bank_id = make_webhook_client(monkeypatch)
+    try:
+        body = (
+            b'{"event":"report.updated","event_id":"rpt-evt-mismatch",'
+            b'"data":{"report_id":"RPT-1","report_type":"settlement","status":"updated"}}'
+        )
+        response = client.post(
+            "/api/v1/forge/webhooks",
+            content=body,
+            headers=signed_headers(body, event_type="report.ready"),
+        )
+        receipt_id = uuid.UUID(response.json()["receipt_id"])
+        with sessions() as db:
+            processed = process_xtradot_webhook_receipt(
+                db, receipt_id=receipt_id, bank_id=bank_id
+            )
+            assert processed["status"] == "ignored"
+            assert "evidence" not in processed
+    finally:
+        client.close()
+        engine.dispose()
+
+
+def test_worker_ignores_report_with_bad_currency(monkeypatch):
+    """Invalid totals are untrustworthy observations: ignored with an error, never guessed."""
+    client, sessions, engine, bank_id = make_webhook_client(monkeypatch)
+    try:
+        body = (
+            b'{"event":"report.ready","event_id":"rpt-evt-badfx",'
+            b'"data":{"report_id":"RPT-1","report_type":"settlement","status":"ready",'
+            b'"amount":"100.00","currency":"NIGERIA"}}'
+        )
+        response = client.post(
+            "/api/v1/forge/webhooks",
+            content=body,
+            headers=signed_headers(body, event_type="report.ready"),
+        )
+        receipt_id = uuid.UUID(response.json()["receipt_id"])
+        with sessions() as db:
+            processed = process_xtradot_webhook_receipt(
+                db, receipt_id=receipt_id, bank_id=bank_id
+            )
+            assert processed["status"] == "ignored"
+        with sessions() as db:
+            receipt = db.get(XtradotWebhookReceipt, receipt_id)
+            assert receipt.raw_body == body
+            assert receipt.processing_error
+    finally:
+        client.close()
+        engine.dispose()
+
+
+def test_report_drops_non_allowlisted_download_url_but_keeps_evidence(monkeypatch):
+    now = NOW
+    event = normalize_receipt_report_event(
+        bank_id=uuid.uuid4(),
+        event_id="rpt-evt-link",
+        event_type="report.ready",
+        raw_body=(
+            b'{"event":"report.ready","event_id":"rpt-evt-link",'
+            b'"data":{"report_id":"RPT-1","report_type":"settlement","status":"ready",'
+            b'"download_url":"http://evil.example/report.csv"}}'
+        ),
+        received_at=now,
+    )
+    assert isinstance(event, ReportEvidenceEvent)
+    assert event.download_url is None
 
 
 def test_worker_processing_is_bank_scoped(monkeypatch):

@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
+from app.db.base import utcnow
 from app.models import Complaint, Incident
 from app.models.enums import IncidentStatus, IssueType
 from app.services.audit import log_event
@@ -124,11 +125,14 @@ def run_detection(
         for c in current_complaints[issue_type]:
             channels[c.channel.value] += 1
 
+        # detected_at is a creation record, not a simulation coordinate: clamp
+        # future bucket-end `now` to wall-clock so feed cursors never jump
+        # ahead of real-time rows and hide them from subsequent polls.
         incident = Incident(
             bank_id=bank_id,
             issue_type=issue_type,
             started_at=current_start,
-            detected_at=now,
+            detected_at=min(now, utcnow()),
             complaint_count=current,
             baseline=result.baseline,
             growth_rate=round(result.growth_rate, 2),
