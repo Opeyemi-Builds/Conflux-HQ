@@ -31,18 +31,35 @@ echo "--> [1/5] Building Backend image (FastAPI + Worker)..."
 docker build -t "$BACKEND_IMAGE" -f backend/Dockerfile backend
 
 echo "--> [2/5] Building Frontend image (Next.js Standalone)..."
-docker build -t "$FRONTEND_IMAGE" -f frontend/Dockerfile frontend
+# Inject .env into frontend build context for Next.js build-time inlining
+if [ -f .env ]; then
+  cp -f .env frontend/.env.production.local
+fi
+(docker build -t "$FRONTEND_IMAGE" -f frontend/Dockerfile frontend) || { rm -f frontend/.env.production.local; exit 1; }
+rm -f frontend/.env.production.local
 
 # 2. Push images to Docker Hub
 echo "--> [3/5] Pushing images to Docker Hub..."
 docker push "$BACKEND_IMAGE"
 docker push "$FRONTEND_IMAGE"
 
-# 3. Apply Storage, ConfigMap, and Public Service
-echo "--> [4/5] Applying Kubernetes base manifests..."
+# 3. Apply Storage, ConfigMap, Secrets from .env, and Public Service
+echo "--> [4/5] Applying Kubernetes base manifests and syncing secrets from .env..."
 kubectl apply -f k8s/pvc.yaml -n "$NAMESPACE"
 kubectl apply -f k8s/configmap.yaml -n "$NAMESPACE"
 kubectl apply -f k8s/service.yaml -n "$NAMESPACE"
+
+ENV_FILES=()
+[ -f .env ] && ENV_FILES+=(--from-env-file=.env)
+[ -f frontend/.env ] && ENV_FILES+=(--from-env-file=frontend/.env)
+
+if [ ${#ENV_FILES[@]} -gt 0 ]; then
+  echo "--> Injecting environment variables from ${ENV_FILES[*]} into secret/conflux-secrets..."
+  kubectl create secret generic conflux-secrets \
+    "${ENV_FILES[@]}" \
+    --namespace="$NAMESPACE" \
+    --dry-run=client -o yaml | kubectl apply -f -
+fi
 
 # 4. Generate deployment with real image tags and apply
 echo "--> [5/5] Deploying pod (frontend, backend + embedded worker)..."
