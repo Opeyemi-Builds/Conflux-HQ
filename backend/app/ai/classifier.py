@@ -26,9 +26,11 @@ def classify(text: str, channel: str = "unknown") -> tuple[ClassificationResult,
     started = time.monotonic()
     provider = settings.ai_provider.lower().strip()
     if provider == "maas":
-        from .forge_classification import classify_forge
+        from .forge_classification import _client as _forge_client
+        if _forge_client is not None or not hasattr(settings, "maas_enabled"):
+            from .forge_classification import classify_forge
+            return classify_forge(text, channel)
 
-        return classify_forge(text, channel)
     if not active_key(settings):
         result = rules_classify(text)
         result._runtime = {"source": "rules", "model": active_model(settings), "prompt_version": prompt_id,

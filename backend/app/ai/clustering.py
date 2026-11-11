@@ -63,3 +63,21 @@ def cluster_complaints(items: list[dict], *, threshold: float = 0.35,
                 continue  # bounded: extra items stay unclustered, never dropped silently
             clusters.append(Cluster(members=[cid], issue_type=issue, similarity=1.0))
     return clusters
+
+
+def cluster_complaint_wording(complaints) -> list[list[str]]:
+    """Conservative wording groups for investigation. Membership does not establish cause."""
+    from collections import defaultdict
+    from datetime import timezone
+    from app.core.privacy import mask_pii
+
+    groups: dict[tuple, list[str]] = defaultdict(list)
+    for complaint in complaints:
+        occurred = complaint.occurred_at
+        hour = occurred.replace(tzinfo=timezone.utc) if occurred.tzinfo is None else occurred.astimezone(timezone.utc)
+        wording = " ".join(re.findall(r"[^\W_]+", mask_pii(complaint.text[:1000]).casefold()))
+        if not wording or complaint.issue_type is None:
+            continue
+        key = (complaint.issue_type, hour.replace(minute=0, second=0, microsecond=0), wording)
+        groups[key].append(str(complaint.id))
+    return [ids for ids in groups.values() if len(ids) > 1]
