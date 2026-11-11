@@ -27,6 +27,8 @@ The scale is real. The CBN received 23,129 customer complaints in 2025, up 10.53
 5. **Drafts** a customer holding message and an IT ticket.
 6. **Waits for a human** to approve anything that touches money. Every step is logged.
 7. **Shows analytics** on trends, root causes, channels and time to detect, with views for agents, IT and management.
+8. **Machine Handoff Feed**: Bank NOC/SIEM workers poll `GET /api/v1/machine/updates` every 5s with scoped `cfx_api_` bearer tokens to stream real-time incidents directly into internal bank dashboards.
+9. **Developer Portal**: Full interactive Stripe-grade documentation at `/developers` with cURL/Python/JS code snippets, Try-It sandbox, and OpenAPI explorer.
 
 ### The demo scenario
 
