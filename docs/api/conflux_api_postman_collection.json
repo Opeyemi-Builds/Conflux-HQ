@@ -1,0 +1,100 @@
+{
+  "info": {
+    "name": "ConfluxHQ API Collection",
+    "_postman_id": "c1f8a84a-9b7e-4b21-89ad-9f76a592810a",
+    "description": "Standardized Postman collection for ConfluxHQ API v1, covering Machine Handoff Feed, JWT Auth, API Key Management, and Ingestion.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Demo Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"Zymic Bank\",\n  \"password\": \"123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login"] }
+          }
+        },
+        {
+          "name": "Current Operator (Me)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwtToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "me"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Machine API",
+      "item": [
+        {
+          "name": "Poll Updates (5s Handoff Feed)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{machineApiKey}}" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/machine/updates?collections=complaints,incidents&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "machine", "updates"],
+              "query": [
+                { "key": "collections", "value": "complaints,incidents" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Machine Summary",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{machineApiKey}}" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/machine/summary", "host": ["{{baseUrl}}"], "path": ["api", "v1", "machine", "summary"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "API Keys",
+      "item": [
+        {
+          "name": "List Keys",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwtToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/api-keys", "host": ["{{baseUrl}}"], "path": ["api", "v1", "api-keys"] }
+          }
+        },
+        {
+          "name": "Generate Key",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwtToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Core NOC Feed Poller\",\n  \"scopes\": [\"read\", \"operate\"]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/api-keys", "host": ["{{baseUrl}}"], "path": ["api", "v1", "api-keys"] }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8000" },
+    { "key": "jwtToken", "value": "" },
+    { "key": "machineApiKey", "value": "cfx_api_..." }
+  ]
+}
