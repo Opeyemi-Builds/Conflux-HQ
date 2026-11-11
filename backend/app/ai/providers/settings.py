@@ -52,10 +52,11 @@ def maas_config_from_settings(settings) -> MaasConfig:
 
 def maas_active(settings) -> bool:
     """True only when the operator selected MaaS and explicitly enabled it."""
-    provider = str(getattr(settings, "ai_provider", "") or "").lower().strip()
-    return provider == "maas" and bool(getattr(settings, "maas_enabled", False))
+    provider = str(getattr(settings, "ai_provider", os.environ.get("AI_PROVIDER", "")) or "").lower().strip()
+    enabled = bool(getattr(settings, "maas_enabled", False)) or os.environ.get("MAAS_ENABLED", "").lower() in ("1", "true", "yes")
+    return provider == "maas" and enabled
 
 
 def maas_key_from_settings(settings) -> str | None:
-    """Team key from shared Settings. Server-only; never log or return it."""
-    return getattr(settings, "gateway_key", None) or None
+    """Team key from shared Settings or environment. Server-only; never log or return it."""
+    return getattr(settings, "gateway_key", None) or os.environ.get("GATEWAY_KEY") or None

@@ -67,12 +67,14 @@ def fallback_brief(evidence: dict, reason: str = "maas_unavailable") -> Investig
 def _registry_ids(evidence: dict) -> set[str]:
     registry = evidence.get("evidence_registry", {})
     ids: set[str] = set()
-    for key in ("complaints", "transactions", "system_events", "social", "payment_evidence"):
-        for item in registry.get(key, []) if isinstance(registry, dict) else []:
-            if isinstance(item, dict) and item.get("id"):
-                ids.add(str(item["id"]))
-            elif isinstance(item, str):
-                ids.add(item)
+    if isinstance(registry, dict):
+        for items in registry.values():
+            if isinstance(items, list):
+                for item in items:
+                    if isinstance(item, dict) and item.get("id"):
+                        ids.add(str(item["id"]))
+                    elif isinstance(item, str):
+                        ids.add(item)
     return ids
 
 

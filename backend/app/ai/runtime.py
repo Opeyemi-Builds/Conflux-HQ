@@ -1,6 +1,7 @@
 """Provider-neutral helpers for AI calls and runtime telemetry."""
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import httpx
@@ -23,8 +24,8 @@ def active_model(settings) -> str:
 def active_key(settings) -> str | None:
     provider = settings.ai_provider.lower().strip()
     if provider == "gemini":
-        return settings.gemini_api_key
-    return getattr(settings, "gateway_key", None)
+        return settings.gemini_api_key or os.environ.get("GEMINI_API_KEY")
+    return getattr(settings, "gateway_key", None) or os.environ.get("GATEWAY_KEY")
 
 
 def gemini_schema(model: type) -> dict:

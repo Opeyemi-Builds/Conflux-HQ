@@ -99,10 +99,11 @@ def create_drafts(db: Session, bank_id, incident: Incident, actor: str = "agent"
     cause = incident.likely_cause or "An investigation is still in progress"
     count = incident.complaint_count
     confidence_str = f"{incident.cause_confidence or 0:.2f}"
+    issue_type_str = getattr(incident.issue_type, "value", str(incident.issue_type))
     facts = {
         "evidence": evidence,
         "incident_id": str(incident.id),
-        "issue_type": incident.issue_type.value,
+        "issue_type": issue_type_str,
         "complaint_count": count,
         "started_at": incident.started_at.isoformat(),
         "likely_cause": cause,
@@ -110,12 +111,12 @@ def create_drafts(db: Session, bank_id, incident: Incident, actor: str = "agent"
     }
 
     customer_template = (
-        f"We are aware of reports from customers affecting {incident.issue_type.value.replace('_', ' ')}. "
+        f"We are aware of reports from customers affecting {issue_type_str.replace('_', ' ')}. "
         "Our teams are investigating and will share confirmed resolution updates. "
         "No amount or resolution status has been confirmed unless a team member follows up with you directly."
     )
     ticket_template = (
-        f"Incident: {incident.issue_type.value}\n"
+        f"Incident: {issue_type_str}\n"
         f"Complaint count: {count}\n"
         f"Started: {incident.started_at.isoformat()}\n"
         f"Likely cause: {cause}\n"

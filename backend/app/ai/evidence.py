@@ -163,7 +163,7 @@ def build_evidence(db: Session, bank_id, incident: Incident) -> dict:
             "note": "Candidate matches are investigative leads, not proof of settlement or refund eligibility.",
         },
         "incident": {
-            "issue_type": incident.issue_type.value,
+            "issue_type": getattr(incident.issue_type, "value", str(incident.issue_type)),
             "started_at": start.isoformat(),
             "complaint_count": incident.complaint_count,
             "baseline": incident.baseline,

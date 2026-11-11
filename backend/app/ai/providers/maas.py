@@ -83,21 +83,43 @@ def _extract_text(data: dict) -> str:
 
 
 def parse_json_text(text: str) -> dict:
-    """Parse model JSON, tolerating markdown fences. Raises MaasError('malformed')."""
+    """Parse model JSON, tolerating markdown fences and conversational wrapping. Raises MaasError('malformed')."""
     cleaned = text.strip()
-    if cleaned.startswith("```"):
-        lines = cleaned.splitlines()
-        lines = lines[1:] if len(lines) > 1 else []
-        if lines and lines[-1].strip().startswith("```"):
-            lines = lines[:-1]
-        cleaned = "\n".join(lines).strip()
+    # 1. Direct JSON parse
     try:
         parsed = json.loads(cleaned)
-    except json.JSONDecodeError as exc:
-        raise MaasError("malformed") from exc
-    if not isinstance(parsed, dict):
-        raise MaasError("malformed")
-    return parsed
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+
+    # 2. Extract from markdown code fences if present
+    if "```" in cleaned:
+        start_fence = cleaned.find("```")
+        content_start = cleaned.find("\n", start_fence)
+        if content_start != -1:
+            end_fence = cleaned.find("```", content_start)
+            fence_block = cleaned[content_start:end_fence if end_fence != -1 else len(cleaned)].strip()
+            try:
+                parsed = json.loads(fence_block)
+                if isinstance(parsed, dict):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+
+    # 3. Find first '{' and last '}'
+    first_brace = cleaned.find("{")
+    last_brace = cleaned.rfind("}")
+    if first_brace != -1 and last_brace > first_brace:
+        snippet = cleaned[first_brace:last_brace + 1]
+        try:
+            parsed = json.loads(snippet)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+    raise MaasError("malformed")
 
 
 def chat_completion(messages: list[dict], *, config: MaasConfig,
