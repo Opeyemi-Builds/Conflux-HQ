@@ -257,14 +257,15 @@ def test_live_x_api_v2_sync_and_recent_search_pull(monkeypatch):
         assert search_call["params"]["user.fields"] == "username,name"
         assert "@zymicbank" in search_call["params"]["query"]
 
-        # Second pull with handle=@myaccessbank and explicit since_id scopes the query to @myaccessbank
-        client.get(
-            "/api/v1/social/x/pull?handle=@myaccessbank&max_results=15&since_id=1854777777777777001&auto_drain=false",
+        # Second pull with handle=@zymic_support and explicit since_id scopes the query to @zymic_support (POST only per sprint rule)
+        client.post(
+            "/api/v1/social/x/pull",
+            json={"handle": "@zymic_support", "max_results": 15, "since_id": "1854777777777777001"},
         )
         second_search = [c for c in captured_calls if c["url"].endswith("/tweets/search/recent")][1]
         assert second_search["params"]["since_id"] == "1854777777777777001"
         assert second_search["params"]["max_results"] == 15
-        assert second_search["params"]["query"] == "(@myaccessbank OR to:myaccessbank) -is:retweet"
+        assert second_search["params"]["query"] == "(@zymic_support OR to:zymic_support) -is:retweet"
     finally:
         engine.dispose()
 

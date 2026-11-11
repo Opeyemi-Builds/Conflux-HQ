@@ -32,23 +32,21 @@ from app.services.worker import drain_jobs, enqueue_job
 router = APIRouter(prefix="/social", tags=["social monitoring"])
 _PLATFORM_CHANNEL = {"x": Channel.X, "instagram": Channel.INSTAGRAM, "facebook": Channel.FACEBOOK}
 _DEFAULTS = {
-    "access bank": [("name", None), ("contextual", None), ("handle", "x"), ("hashtag", "x")],
-    "united bank for africa": [("name", None), ("handle", "x"), ("hashtag", "x")],
-    "zymic bank": [("name", None), ("handle", "x"), ("hashtag", "x")],
+    "zymic bank": [("name", None), ("contextual", None), ("handle", "x"), ("hashtag", "x")],
+    "apex demo bank": [("name", None), ("handle", "x"), ("hashtag", "x")],
 }
 
 
 class XReplayRequest(BaseModel):
     limit: int | None = Field(default=None, ge=1, le=200)
     at: AwareDatetime | None = None
-    auto_drain: bool = True
 
 
 class XPullRequest(BaseModel):
     mode: str = Field(default="recent_search", pattern=r"^(recent_search|filtered_stream)$")
     handle: str | None = Field(
         default=None,
-        description="Optional X handle to fetch mentions for (e.g. '@myaccessbank' or '@accessbank_help')",
+        description="Optional X handle to fetch mentions for (e.g. '@zymicbank' or '@zymic_support')",
     )
     handles: list[str] | None = Field(
         default=None,
@@ -57,7 +55,6 @@ class XPullRequest(BaseModel):
     max_results: int = Field(default=15, ge=1, le=100)
     since_id: str | None = None
     fallback_to_replay: bool = False
-    auto_drain: bool = True
 
 
 class XSyncRulesRequest(BaseModel):
@@ -67,22 +64,19 @@ class XSyncRulesRequest(BaseModel):
 def _seed_defaults(db, bank_id: uuid.UUID, bank_name: str):
     name = " ".join(bank_name.casefold().split())
     entries = [(name, "name", None)]
-    for kind, platform in _DEFAULTS.get(name, []):
-        if name == "united bank for africa":
-            short, handle, hashtag = "uba", "@ubagroup", "#uba"
-        elif name == "zymic bank":
-            short, handle, hashtag = "zymic", "@zymicbank", "#zymicbank"
-        else:
-            short, handle, hashtag = "access", "@accessbankplc", "#accessbank"
-        value = {"name": name, "contextual": short, "handle": handle, "hashtag": hashtag}[kind]
+    short, handle, hashtag = "zymic", "@zymicbank", "#zymicbank"
+    if name != "zymic bank":
+        clean_slug = "".join(c for c in name if c.isalnum())[:15] or "demobank"
+        short, handle, hashtag = clean_slug, f"@{clean_slug}", f"#{clean_slug}"
+    for kind, platform in _DEFAULTS.get(name, [("name", None), ("handle", "x"), ("hashtag", "x")]):
+        value = {"name": name, "contextual": short, "handle": handle, "hashtag": hashtag}.get(kind, name)
         entries.append((value.casefold(), kind, platform))
-    if name in ("zymic bank", "access bank"):
-        entries.extend([
-            ("@myaccessbank", "handle", "x"),
-            ("@accessbank_help", "handle", "x"),
-        ])
     if name == "zymic bank":
-        entries.append(("@confluxbankhq", "handle", "x"))
+        entries.extend([
+            ("@zymic_help", "handle", "x"),
+            ("@zymic_support", "handle", "x"),
+            ("@confluxbankhq", "handle", "x"),
+        ])
     existing = {a.value for a in db.scalars(select(BankAlias).where(BankAlias.bank_id == bank_id)).all()}
     for value, kind, platform in entries:
         if value not in existing:
@@ -410,30 +404,6 @@ def _ensure_handles_for_bank(db: Session, bank_id: uuid.UUID, requested_handles:
     return normalized
 
 
-@router.get("/x/pull")
-def x_pull_live_get(
-    user: Operator,
-    db: DbSession,
-    handle: str = Query(
-        default="@myaccessbank",
-        description="X handle to fetch latest mentions for (e.g. @myaccessbank or @accessbank_help)",
-    ),
-    max_results: int = Query(default=15, ge=1, le=100),
-    since_id: str | None = Query(default=None),
-    auto_drain: bool = Query(default=True),
-):
-    """Fetch the latest live mentions for an X handle (defaults to `@myaccessbank`) via X API v2 Recent Search."""
-    payload = XPullRequest(
-        mode="recent_search",
-        handle=handle,
-        max_results=max_results,
-        since_id=since_id,
-        fallback_to_replay=False,
-        auto_drain=auto_drain,
-    )
-    return x_pull_live_or_fallback(user=user, db=db, payload=payload)
-
-
 @router.post("/x/pull")
 def x_pull_live_or_fallback(
     user: Operator,
@@ -470,11 +440,7 @@ def x_pull_live_or_fallback(
             target_bank_id=user.bank_id,
             fallback_to_replay=req.fallback_to_replay,
         )
-    worker_result = drain_jobs(db, bank_id=user.bank_id, limit=200) if req.auto_drain else None
-    return {
-        **pull_result,
-        "worker_drain": worker_result,
-    }
+    return pull_result
 
 
 @router.post("/x/replay")
@@ -490,8 +456,4 @@ def x_replay_mentions(
         db.commit()
     req = payload or XReplayRequest()
     replay_result = replay_recorded_mentions(db, limit=req.limit, anchor_at=req.at)
-    worker_result = drain_jobs(db, bank_id=user.bank_id, limit=200) if req.auto_drain else None
-    return {
-        **replay_result,
-        "worker_drain": worker_result,
-    }
+    return replay_result

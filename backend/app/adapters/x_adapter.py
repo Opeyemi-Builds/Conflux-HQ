@@ -98,7 +98,7 @@ def compile_combined_search_query(db: Session, *, handles: list[str] | None = No
             if identity not in all_identities:
                 all_identities.append(identity)
     if not all_identities:
-        return "(@myaccessbank OR to:myaccessbank OR @accessbank_help OR to:accessbank_help) -is:retweet"
+        return "(@zymicbank OR to:zymicbank OR @zymic_support OR to:zymic_support) -is:retweet"
     clauses = []
     for identity in all_identities:
         if identity.startswith("@"):
@@ -429,7 +429,7 @@ class XAdapter:
         if not self.settings.x_bearer_token:
             if fallback_to_replay:
                 replay = replay_recorded_mentions(self.db, limit=max_results)
-                return {"source": "replay_fallback", "reason": "x_bearer_token_not_configured", **replay}
+                return {**replay, "source": "replay_fallback", "reason": "x_bearer_token_not_configured"}
             return {
                 "source": "none",
                 "accepted": False,
@@ -465,10 +465,10 @@ class XAdapter:
             if fallback_to_replay:
                 replay = replay_recorded_mentions(self.db, limit=max_results)
                 return {
+                    **replay,
                     "source": "replay_fallback",
                     "reason": f"x_api_http_{exc.response.status_code}",
                     "x_api_error": err_detail,
-                    **replay,
                 }
             return {
                 "source": "live_error",
@@ -481,7 +481,7 @@ class XAdapter:
         except httpx.HTTPError as exc:
             if fallback_to_replay:
                 replay = replay_recorded_mentions(self.db, limit=max_results)
-                return {"source": "replay_fallback", "reason": f"x_api_error: {exc}", **replay}
+                return {**replay, "source": "replay_fallback", "reason": f"x_api_error: {exc}"}
             return {"source": "live_error", "accepted": False, "reason": str(exc), "query": query}
 
         meta = payload.get("meta") or {}
@@ -658,6 +658,7 @@ def replay_recorded_mentions(
                 complaints_created += len(outcome.get("complaint_ids", [outcome.get("complaint_id")]))
 
     return {
+        "source": "social_replay",
         "replayed": len(raw_items),
         "accepted": accepted,
         "duplicates": duplicates,

@@ -10,17 +10,25 @@ Kind = Literal["name", "handle", "hashtag", "contextual"]
 
 
 class AliasInput(BaseModel):
-    value: str = Field(min_length=2, max_length=120)
+    value: str = Field(min_length=2, max_length=60)
     kind: Kind = "name"
     platform: Platform | None = None
 
     @field_validator("value")
     @classmethod
-    def normalize(cls, value):
-        value = " ".join(value.casefold().split())
-        if len(value) < 2 or not any(c.isalnum() for c in value):
+    def normalize(cls, value: str):
+        v = " ".join(value.strip().casefold().split())
+        # Reject query operators, punctuation, wildcards, injection vectors
+        disallowed = set('()[]{}<>"\';,/\\|*?!=+-:')
+        if any(c in disallowed for c in v):
+            raise ValueError("Alias cannot contain query operators, quotes, or punctuation")
+        # Reject boolean keywords that could manipulate social queries
+        tokens = set(v.split())
+        if tokens & {"or", "and", "not", "has", "lang", "is", "url"}:
+            raise ValueError("Alias cannot contain query syntax operators")
+        if len(v) < 2 or not any(c.isalnum() for c in v):
             raise ValueError("Alias must contain letters or numbers")
-        return value
+        return v
 
 
 class AliasBatch(BaseModel):
