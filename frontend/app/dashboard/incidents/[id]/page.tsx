@@ -7,12 +7,20 @@ import {
   ClipboardCopy,
   MessageSquare,
   RefreshCw,
+  ScrollText,
   Server,
   ShieldAlert,
 } from "lucide-react";
 import { buildIncidentFromBackend, useDash } from "@/components/dashboard/Provider";
 import { Card, IssueBadge, PageHeader, Stat, Tag } from "@/components/dashboard/ui";
-import { api, ApiError, type BackendIncident, type BackendDraft, type IncidentTimelineItem } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  type BackendAuditEntry,
+  type BackendDraft,
+  type BackendIncident,
+  type IncidentTimelineItem,
+} from "@/lib/api";
 import { SpikeChart } from "@/components/dashboard/Charts";
 
 export default function IncidentPage({ params }: { params: Promise<{ id: string }> }) {
@@ -21,51 +29,79 @@ export default function IncidentPage({ params }: { params: Promise<{ id: string 
 }
 
 function IncidentDetail({ id }: { id: string }) {
-  const { decide, complaints, investigate, user } = useDash();
-  const [detail, setDetail] = useState<{ incident: BackendIncident; drafts: BackendDraft[]; timeline: IncidentTimelineItem[] } | null>(null);
+  const { decide, complaints, incidents, investigate, user } = useDash();
+  const [detail, setDetail] = useState<{
+    incident: BackendIncident;
+    drafts: BackendDraft[];
+    timeline: IncidentTimelineItem[];
+    auditEntries: BackendAuditEntry[];
+  } | null>(null);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
   const [pending, setPending] = useState(false);
   const canWrite = user?.role !== "manager";
 
+  const resolvedId = id === "latest" && incidents[0]?.id ? incidents[0].id : id;
+
   useEffect(() => {
     let active = true;
     async function load() {
-      if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) {
+      if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(resolvedId)) {
         setError("Incident not found.");
         return;
       }
       try {
-        const incident = await api.getIncident(id);
+        const incident = await api.getIncident(resolvedId);
         if (!active) return;
-        const [drafts, timeline] = await Promise.all([
-          canWrite ? api.getIncidentDrafts(id).catch(() => []) : [],
-          api.getIncidentTimeline(id).then((result) => result.timeline).catch(() => null),
+        const [drafts, timeline, auditEntries] = await Promise.all([
+          canWrite ? api.getIncidentDrafts(resolvedId).catch(() => []) : [],
+          api.getIncidentTimeline(resolvedId).then((result) => result.timeline).catch(() => null),
+          canWrite ? api.getIncidentAudit(resolvedId).catch(() => []) : [],
         ]);
         if (!active) return;
-        setDetail({ incident, drafts, timeline: timeline ?? [] });
+        setDetail({
+          incident,
+          drafts,
+          timeline: timeline ?? [],
+          auditEntries: auditEntries ?? [],
+        });
         if (!timeline) setError("The reconciliation timeline could not be loaded.");
       } catch (err) {
         if (active) {
           setDetail(null);
-          setError(err instanceof ApiError && err.status === 404 ? "Incident not found." : "Could not load the incident.");
+          setError(
+            err instanceof ApiError && err.status === 404
+              ? "Incident not found."
+              : "Could not load the incident."
+          );
         }
       }
     }
     void load();
-    return () => { active = false; };
-  }, [canWrite, id, revision]);
+    return () => {
+      active = false;
+    };
+  }, [canWrite, resolvedId, revision]);
 
   const inc = detail && buildIncidentFromBackend(detail.incident, detail.drafts, complaints);
   if (!inc) {
     return (
       <Card className="p-8 text-center">
-        <p className="text-navy/60 mb-3">
-          {error || "Loading incident…"}
-        </p>
-        {error && <button type="button" className="mr-4 underline" onClick={() => { setError(""); setRevision((value) => value + 1); }}>Retry</button>}
-        <Link href="/dashboard" className="text-flux font-semibold underline">
-          Back to overview
+        <p className="text-navy/60 mb-3">{error || "Loading incident…"}</p>
+        {error && (
+          <button
+            type="button"
+            className="mr-4 underline"
+            onClick={() => {
+              setError("");
+              setRevision((value) => value + 1);
+            }}
+          >
+            Retry
+          </button>
+        )}
+        <Link href="/dashboard/incidents" className="text-flux font-semibold underline">
+          Back to incidents
         </Link>
       </Card>
     );
@@ -90,17 +126,30 @@ function IncidentDetail({ id }: { id: string }) {
 
   return (
     <>
-      <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-navy/60 hover:text-navy mb-4">
-        <ArrowLeft className="w-4 h-4" />
-        Overview
-      </Link>
+      <div className="flex items-center gap-4 mb-4">
+        <Link
+          href="/dashboard/incidents"
+          className="inline-flex items-center gap-1.5 text-sm text-navy/60 hover:text-navy"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          All incidents
+        </Link>
+        <span className="text-navy/25">·</span>
+        <Link
+          href="/dashboard"
+          className="text-sm text-navy/50 hover:text-navy"
+        >
+          Overview
+        </Link>
+      </div>
+
       <PageHeader
         title={inc.title}
         sub={`${inc.id.slice(0, 8)} · started ${inc.startedAt} · detected ${inc.detectedAt} · ${inc.region}`}
         right={
           <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => runAction(() => investigate(id))}
+              onClick={() => runAction(() => investigate(resolvedId))}
               disabled={pending || !canWrite}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-navy/5 hover:bg-navy/10 text-navy text-xs font-semibold transition-colors disabled:opacity-50"
             >
@@ -187,19 +236,33 @@ function IncidentDetail({ id }: { id: string }) {
 
       <Card className="p-6 mb-4">
         <h3 className="font-semibold text-navy">Reconciliation timeline</h3>
-        <p className="text-sm text-navy/60">System events are time correlations. Transaction entries are investigative candidates.</p>
+        <p className="text-sm text-navy/60">
+          System events are time correlations. Transaction entries are investigative candidates.
+        </p>
         {detail?.timeline.length ? (
           <ol className="mt-3 space-y-2 text-sm">
             {detail.timeline.map((entry) => (
               <li key={`${entry.kind}-${entry.id}-${entry.at}`} className="break-all">
                 <time dateTime={entry.at}>{entry.at}</time> · {entry.kind.replaceAll("_", " ")} · {entry.id}
-                {[entry.status, entry.settlement_status, entry.association, entry.channel, entry.component, entry.event_type, entry.processor].filter(Boolean).map((value, index) => (
-                  <span key={index}> · {value?.replaceAll("_", " ")}</span>
-                ))}
+                {[
+                  entry.status,
+                  entry.settlement_status,
+                  entry.association,
+                  entry.channel,
+                  entry.component,
+                  entry.event_type,
+                  entry.processor,
+                ]
+                  .filter(Boolean)
+                  .map((value, index) => (
+                    <span key={index}> · {value?.replaceAll("_", " ")}</span>
+                  ))}
               </li>
             ))}
           </ol>
-        ) : <p className="mt-3 text-sm">No timeline entries available.</p>}
+        ) : (
+          <p className="mt-3 text-sm">No timeline entries available.</p>
+        )}
       </Card>
 
       <div className="grid lg:grid-cols-2 gap-4 mb-4">
@@ -285,18 +348,32 @@ function IncidentDetail({ id }: { id: string }) {
           <div key={draft?.id ?? index} className="mt-3 flex flex-wrap items-center gap-3">
             <span>{index === 0 ? "Customer message" : "IT ticket"}</span>
             <Tag tone="navy">{draft?.status ?? "No draft"}</Tag>
-            {draft?.status === "pending" && canWrite && (["approved", "rejected"] as const).map((decision) => (
-              <button key={decision} type="button" disabled={pending} className="rounded-full border px-3 py-1 disabled:opacity-50"
-                onClick={() => runAction(async () => {
-                  const saved = await decide(draft.id, decision);
-                  setDetail((current) => current && ({
-                    ...current,
-                    drafts: current.drafts.map((item) => item.id === saved.id ? saved : item),
-                  }));
-                })}>
-                {decision === "approved" ? "Approve" : "Reject"}
-              </button>
-            ))}
+            {draft?.status === "pending" &&
+              canWrite &&
+              (["approved", "rejected"] as const).map((decision) => (
+                <button
+                  key={decision}
+                  type="button"
+                  disabled={pending}
+                  className="rounded-full border px-3 py-1 disabled:opacity-50"
+                  onClick={() =>
+                    runAction(async () => {
+                      const saved = await decide(draft.id, decision);
+                      setDetail(
+                        (current) =>
+                          current && {
+                            ...current,
+                            drafts: current.drafts.map((item) =>
+                              item.id === saved.id ? saved : item
+                            ),
+                          }
+                      );
+                    })
+                  }
+                >
+                  {decision === "approved" ? "Approve" : "Reject"}
+                </button>
+              ))}
           </div>
         ))}
       </Card>
@@ -309,13 +386,94 @@ function IncidentDetail({ id }: { id: string }) {
           </div>
           <div className="grid md:grid-cols-3 gap-3">
             {inc.examples.map((e, idx) => (
-              <p key={`${idx}-${e.slice(0, 12)}`} className="rounded-xl bg-navy/[0.03] p-4 text-sm text-navy/80">
+              <p
+                key={`${idx}-${e.slice(0, 12)}`}
+                className="rounded-xl bg-navy/[0.03] p-4 text-sm text-navy/80"
+              >
                 &ldquo;{e}&rdquo;
               </p>
             ))}
           </div>
         </Card>
       )}
+
+      {/* Incident Audit Trail (`GET /api/v1/ai/incidents/{id}/audit`) */}
+      <Card className="p-6 mt-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <ScrollText className="w-4 h-4 text-flux" />
+            <h3 className="font-semibold text-navy">Incident audit log</h3>
+          </div>
+          <Tag>{detail?.auditEntries.length ?? 0} events</Tag>
+        </div>
+        <p className="text-xs text-navy/55 mb-4">
+          Immutable decision and investigation trail recorded via{" "}
+          <code className="font-mono text-[11px] bg-navy/5 px-1.5 py-0.5 rounded">
+            GET /api/v1/ai/incidents/{inc.id.slice(0, 8)}…/audit
+          </code>
+        </p>
+
+        {!detail?.auditEntries.length ? (
+          <p className="text-sm text-navy/50">
+            No audit events recorded for this incident yet. Run an investigation or approve/reject a draft above.
+          </p>
+        ) : (
+          <div className="divide-y divide-navy/[0.06]">
+            {detail.auditEntries.map((entry) => {
+              const decisionVal =
+                typeof entry.details?.decision === "string"
+                  ? entry.details.decision
+                  : entry.entity_type || "recorded";
+              const noteVal =
+                typeof entry.details?.note === "string"
+                  ? entry.details.note
+                  : entry.details
+                  ? JSON.stringify(entry.details)
+                  : null;
+              return (
+                <div
+                  key={entry.id}
+                  className="py-3 flex flex-wrap items-center justify-between gap-3 text-sm"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-navy">
+                        {entry.action.replaceAll("_", " ")}
+                      </span>
+                      <Tag
+                        tone={
+                          decisionVal === "approved"
+                            ? "green"
+                            : decisionVal === "rejected"
+                            ? "red"
+                            : "navy"
+                        }
+                      >
+                        {decisionVal}
+                      </Tag>
+                    </div>
+                    {noteVal && (
+                      <p className="text-xs text-navy/60 mt-0.5 break-all">{noteVal}</p>
+                    )}
+                  </div>
+                  <div className="text-right text-xs text-navy/55">
+                    <p className="font-medium text-navy/75">{entry.actor}</p>
+                    <p className="font-mono text-[11px]">
+                      {new Date(entry.created_at).toLocaleString("en-GB", {
+                        day: "2-digit",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
     </>
   );
 }
