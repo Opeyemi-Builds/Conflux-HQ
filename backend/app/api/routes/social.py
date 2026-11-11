@@ -40,6 +40,7 @@ _DEFAULTS = {
 class XReplayRequest(BaseModel):
     limit: int | None = Field(default=None, ge=1, le=200)
     at: AwareDatetime | None = None
+    auto_drain: bool = False
 
 
 class XPullRequest(BaseModel):
@@ -55,6 +56,7 @@ class XPullRequest(BaseModel):
     max_results: int = Field(default=15, ge=1, le=100)
     since_id: str | None = None
     fallback_to_replay: bool = False
+    auto_drain: bool = False
 
 
 class XSyncRulesRequest(BaseModel):
@@ -440,6 +442,10 @@ def x_pull_live_or_fallback(
             target_bank_id=user.bank_id,
             fallback_to_replay=req.fallback_to_replay,
         )
+    if req.auto_drain:
+        from app.services.worker import drain_jobs
+
+        pull_result["drain"] = drain_jobs(db, bank_id=user.bank_id)
     return pull_result
 
 
@@ -456,4 +462,8 @@ def x_replay_mentions(
         db.commit()
     req = payload or XReplayRequest()
     replay_result = replay_recorded_mentions(db, limit=req.limit, anchor_at=req.at)
+    if req.auto_drain:
+        from app.services.worker import drain_jobs
+
+        replay_result["drain"] = drain_jobs(db, bank_id=user.bank_id)
     return replay_result

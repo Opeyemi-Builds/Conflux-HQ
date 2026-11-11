@@ -74,8 +74,13 @@ def compile_desired_rules(db: Session) -> list[dict]:
     return rules
 
 
-def compile_combined_search_query(db: Session, *, handles: list[str] | None = None) -> str:
-    """Build a single shared X v2 Recent Search query across requested handles or all active tenants' handles."""
+def compile_combined_search_query(
+    db: Session,
+    *,
+    handles: list[str] | None = None,
+    target_bank_id: uuid.UUID | None = None,
+) -> str:
+    """Build a single X v2 Recent Search query across requested handles, a specific tenant, or all active tenants."""
     if handles:
         cleaned = []
         for h in handles:
@@ -92,6 +97,10 @@ def compile_combined_search_query(db: Session, *, handles: list[str] | None = No
             return f"({' OR '.join(clauses)}) -is:retweet"
 
     rules = compile_desired_rules(db)
+    if target_bank_id is not None:
+        target_str = str(target_bank_id)
+        rules = [r for r in rules if r.get("bank_id") == target_str]
+
     all_identities: list[str] = []
     for r in rules:
         for identity in r.get("identities", r.get("handles", [])):
@@ -439,7 +448,7 @@ class XAdapter:
 
         # X API v2 strictly requires max_results in [10, 100] on /2/tweets/search/recent
         clamped_max = max(10, min(100, max_results, max(10, remaining)))
-        query = compile_combined_search_query(self.db, handles=handles)
+        query = compile_combined_search_query(self.db, handles=handles, target_bank_id=target_bank_id)
         params: dict[str, str | int] = {
             "query": query,
             "max_results": clamped_max,
