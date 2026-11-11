@@ -19,6 +19,7 @@ This is an active, running reference documenting **cross-cutting changes** that 
 | **`ComplaintRead` Schema** | Added `payment_reference: str | None = None` | **Frontend**, **Opeyemi** | Update TypeScript types to consume `payment_reference` |
 | **Worker Queue** | Ingested complaints enqueue `JobKind.CLASSIFY_COMPLAINT` with no pre-labels | **Andrew**, **Opeyemi** | MaaS classifier evaluates severity dynamically |
 | **API Router** | Mounted `/api/v1/ingestion` in `app/api/router.py` | **Opeyemi** | Router registration already active; do not overwrite |
+| **Frontend Rebuild** | API-First Next.js Rebuild (`/developers`, `/dashboard/settings/keys`, `/dashboard/incidents`, 5s Ticker) | **Frontend**, **All** | Stripe-grade integration docs, machine key generator, real-time handoff ticker, live health status |
 | **Trigger Amounts** | Fixed `.02` = timeout/reversal; `.05` = withheld webhook | **Adfola**, **Andrew**, **dev_id** | Reconcile payment status against these exact Forge triggers |
 | **Social Guard** | Added `settings.social_live_enabled` | **Forge Deployment** | Set to `false` in Forge namespace to prevent live X calls |
 
