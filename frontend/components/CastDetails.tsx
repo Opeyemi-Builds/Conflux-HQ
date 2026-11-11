@@ -170,6 +170,7 @@ export default function CastDetails() {
             <a href="#workflow">Workflow</a>
             <a href="#teams">Your team</a>
             <a href="#questions">Questions</a>
+            <Link href="/developers">Developers</Link>
             <Link href="/login">Sign in <ArrowUpRight size={13} /></Link>
           </nav>
         </div>

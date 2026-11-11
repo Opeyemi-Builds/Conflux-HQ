@@ -128,6 +128,7 @@ export default function CastLanding() {
       <nav aria-label="Main navigation">
         <a href="#platform">The platform</a>
         <a href="#workflow">The workflow</a>
+        <Link href="/developers">Developers</Link>
         <Link className="cast-pill" href="/login">Sign in <ArrowUpRight size={14} /></Link>
       </nav>
     </header>
