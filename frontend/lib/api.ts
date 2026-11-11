@@ -167,6 +167,54 @@ export interface BackendAuditEntry {
   created_at: string;
 }
 
+export interface BackendApiKey {
+  id: string;
+  name: string;
+  key_prefix: string;
+  scopes: string[];
+  status: string;
+  expires_at?: string | null;
+  created_at: string;
+  last_used_at?: string | null;
+  revoked_at?: string | null;
+  demo: boolean;
+}
+
+export interface BackendApiKeyCreated {
+  id: string;
+  name: string;
+  key_prefix: string;
+  scopes: string[];
+  token: string;
+  expires_at?: string | null;
+  created_at: string;
+}
+
+export interface HandoffUpdateItem {
+  collection: "complaints" | "incidents" | "drafts" | "actions" | "investigations" | "audit";
+  id: string;
+  updated_at: string;
+  data: Record<string, unknown>;
+}
+
+export interface HandoffUpdatesResponse {
+  bank_id: string;
+  since: string | null;
+  cursor: string | null;
+  count: number;
+  truncated: boolean;
+  collections: string[];
+  poll_interval_seconds?: number;
+  items: HandoffUpdateItem[];
+}
+
+export interface BackendHealthStatus {
+  status: string;
+  app?: string;
+  environment?: string;
+  database?: string;
+}
+
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) {
     super(message);
@@ -189,8 +237,12 @@ class ConfluxApiClient {
     localStorage.removeItem("conflux_user");
   }
 
-  async login(email: string, password: string): Promise<void> {
-    await this.signIn({ email, password });
+  async login(identifier: string, password: string): Promise<void> {
+    if (identifier.includes("@")) {
+      await this.signIn({ email: identifier, password });
+    } else {
+      await this.signIn({ username: identifier, password });
+    }
   }
 
   async enterDemo(): Promise<void> {
@@ -307,9 +359,165 @@ class ConfluxApiClient {
     return res.json();
   }
 
+  // Public health check
+  async checkHealth(): Promise<BackendHealthStatus> {
+    const res = await fetch(`${API_BASE}/api/v1/health`, {
+      signal: AbortSignal.timeout(6000),
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) {
+      throw new Error(`Health check failed (${res.status})`);
+    }
+    return res.json();
+  }
+
   // Current authenticated user profile
   async getMe(): Promise<BackendUser> {
     return this.request<BackendUser>("/api/v1/auth/me");
+  }
+
+  // Machine API Keys Management (Admin JWT)
+  async listKeys(): Promise<BackendApiKey[]> {
+    return this.request<BackendApiKey[]>("/api/v1/api-keys");
+  }
+
+  async createKey(payload: {
+    name: string;
+    scopes: string[];
+    expires_at?: string | null;
+    demo?: boolean;
+  }): Promise<BackendApiKeyCreated> {
+    const created = await this.request<BackendApiKeyCreated>("/api/v1/api-keys", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (typeof window !== "undefined" && created.token) {
+      localStorage.setItem("conflux_last_machine_key", created.token);
+    }
+    return created;
+  }
+
+  async revokeKey(keyId: string): Promise<BackendApiKey> {
+    return this.request<BackendApiKey>(`/api/v1/api-keys/${encodeURIComponent(keyId)}/revoke`, {
+      method: "POST",
+    });
+  }
+
+  // Machine Handoff Feed & Live Tester
+  async machineUpdates(params?: {
+    since?: string | null;
+    collections?: string;
+    limit?: number;
+    apiKey?: string;
+  }): Promise<HandoffUpdatesResponse> {
+    const query = new URLSearchParams();
+    if (params?.since) query.set("since", params.since);
+    query.set("collections", params?.collections || "complaints,incidents");
+    query.set("limit", String(params?.limit || 20));
+
+    const machineKey =
+      params?.apiKey ||
+      (typeof window !== "undefined" ? localStorage.getItem("conflux_last_machine_key") || "" : "");
+
+    if (machineKey && machineKey.startsWith("cfx_api_")) {
+      const res = await fetch(`${API_BASE}/api/v1/machine/updates?${query.toString()}`, {
+        signal: AbortSignal.timeout(10000),
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${machineKey}`,
+        },
+      });
+      if (res.ok) {
+        return res.json();
+      }
+    }
+
+    // Fallback when no machine key is cached in browser yet: synthesize handoff ticker from live JWT endpoints
+    const [complaints, incidents] = await Promise.all([
+      this.getComplaints({ limit: Math.min(params?.limit || 20, 20) }).catch(() => []),
+      this.getIncidents().catch(() => []),
+    ]);
+    const items: HandoffUpdateItem[] = [
+      ...complaints.slice(0, 14).map((c) => ({
+        collection: "complaints" as const,
+        id: c.id,
+        updated_at: c.occurred_at || c.created_at || new Date().toISOString(),
+        data: {
+          id: c.id,
+          channel: c.channel,
+          issue_type: c.issue_type,
+          severity: c.severity,
+          text: c.masked_text || c.text,
+          summary: c.summary,
+          region: c.region,
+          occurred_at: c.occurred_at,
+          incident_id: c.incident_id,
+        },
+      })),
+      ...incidents.slice(0, 6).map((i) => ({
+        collection: "incidents" as const,
+        id: i.id,
+        updated_at: i.detected_at,
+        data: {
+          id: i.id,
+          issue_type: i.issue_type,
+          status: i.status,
+          complaint_count: i.complaint_count,
+          detected_at: i.detected_at,
+        },
+      })),
+    ]
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+      .slice(0, params?.limit || 20);
+
+    return {
+      bank_id: "active-tenant",
+      since: params?.since || null,
+      cursor: items[0]?.updated_at || params?.since || null,
+      count: items.length,
+      truncated: false,
+      collections: (params?.collections || "complaints,incidents").split(","),
+      poll_interval_seconds: 5,
+      items,
+    };
+  }
+
+  async machineRequest(
+    token: string,
+    endpoint: string,
+    method: "GET" | "POST" = "GET",
+    body?: unknown
+  ): Promise<{ status: number; ok: boolean; durationMs: number; data: unknown }> {
+    const start = performance.now();
+    const cleanToken = token.replace(/^Bearer\s+/i, "").trim();
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+    };
+    if (cleanToken) {
+      headers.Authorization = `Bearer ${cleanToken}`;
+    }
+    if (method === "POST") {
+      headers["Content-Type"] = "application/json";
+    }
+    const res = await fetch(`${API_BASE}${endpoint}`, {
+      method,
+      headers,
+      body: method === "POST" && body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    const durationMs = Math.round(performance.now() - start);
+    let data: unknown = null;
+    const text = await res.text().catch(() => "");
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = text;
+    }
+    return {
+      status: res.status,
+      ok: res.ok,
+      durationMs,
+      data,
+    };
   }
 
   private reconciliation<T>(path: string, method = "GET", payload?: unknown): Promise<T> {

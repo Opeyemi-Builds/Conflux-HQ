@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import {
   ArrowLeft,
   ArrowRight,
+  BookOpen,
   Building2,
   CheckCircle2,
   Eye,
@@ -18,16 +19,15 @@ import {
   ShieldCheck,
   UserCheck,
 } from "lucide-react";
-import LogoIcon from "@/components/LogoIcon";
 import { api } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<"login" | "register">("login");
 
-  // Sign-in state
-  const [identifier, setIdentifier] = useState("");
-  const [password, setPassword] = useState("");
+  // Sign-in state (pre-populated with demo credentials for instant evaluation)
+  const [identifier, setIdentifier] = useState("Zymic Bank");
+  const [password, setPassword] = useState("123");
   const [showPw, setShowPw] = useState(false);
 
   // Register state
@@ -51,7 +51,11 @@ export default function LoginPage() {
       await api.login(identifier.trim(), password);
       router.push("/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Authentication failed. Please check your credentials.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Authentication failed. Please check your credentials."
+      );
     } finally {
       setLoading(false);
     }
@@ -116,18 +120,31 @@ export default function LoginPage() {
         <div>
           <div className="flex items-center justify-between mb-12">
             <Link href="/" className="inline-flex items-center gap-2.5">
-              <LogoIcon className="w-9 h-9" />
+              <img
+                src="/conflux-logo-full.jpg"
+                alt="Conflux HQ"
+                className="h-9 w-auto rounded-lg object-contain bg-white px-2 py-0.5"
+              />
               <span className="text-2xl font-semibold tracking-tight">
                 Conflux <span className="text-flux">HQ</span>
               </span>
             </Link>
-            <Link
-              href="/"
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-white/60 hover:text-white transition-colors"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              Back to site
-            </Link>
+            <div className="flex items-center gap-4">
+              <Link
+                href="/developers"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-flux-soft hover:text-white transition-colors"
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                API Docs
+              </Link>
+              <Link
+                href="/"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-white/60 hover:text-white transition-colors"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Back to site
+              </Link>
+            </div>
           </div>
 
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/10 text-xs font-semibold text-flux-soft mb-6">
@@ -142,7 +159,8 @@ export default function LoginPage() {
             Bank-grade complaint intelligence, ready for live operations.
           </h1>
           <p className="text-white/65 text-base md:text-lg mt-4 max-w-md leading-relaxed">
-            Sign in to monitor customer complaints, investigate payment incidents, and review proposed responses.
+            Sign in to monitor customer complaints, investigate payment incidents, and issue scoped{" "}
+            <code className="font-mono text-sm text-flux-soft">cfx_api_</code> keys for your bank&apos;s internal dashboards.
           </p>
 
           <div className="mt-10 space-y-4">
@@ -156,8 +174,8 @@ export default function LoginPage() {
                 "Flags volume anomalies exceeding trailing median + 3 MAD and correlates against switch transactions.",
               ],
               [
-                "Human-in-the-Loop Guardrails",
-                "Drafts customer holding messages and IT tickets while enforcing strict core-banking sign-off for reversals.",
+                "API-First Machine Handoff",
+                "Generate scoped cfx_api_ bearer keys to poll /api/v1/machine/updates every 5 seconds into your bank's own SIEM or NOC.",
               ],
             ].map(([title, desc]) => (
               <div
@@ -177,7 +195,7 @@ export default function LoginPage() {
         <div className="mt-10 pt-6 border-t border-white/10 flex flex-wrap items-center justify-between gap-4 text-xs text-white/50">
           <span className="flex items-center gap-1.5">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            Tenant-isolated JWT bearer authentication
+            Tenant-isolated JWT &amp; cfx_api_ authentication
           </span>
           <span>NDPR &amp; CBN Consumer Protection aligned</span>
         </div>
@@ -242,7 +260,7 @@ export default function LoginPage() {
                     Sign in to Console
                   </h2>
                   <p className="text-sm text-navy/55 mt-0.5">
-                    Enter your bank workspace and operator credentials
+                    Enter your bank name or operator email
                   </p>
                 </div>
                 <div className="w-10 h-10 rounded-2xl bg-flux/10 flex items-center justify-center text-flux">
@@ -250,20 +268,44 @@ export default function LoginPage() {
                 </div>
               </div>
 
+              {/* Demo Credentials Pill */}
+              <div className="mb-5 rounded-2xl bg-cream/80 border border-navy/10 p-3.5 flex items-center justify-between gap-2 text-xs">
+                <div>
+                  <span className="font-semibold text-navy">Demo Bank Login:</span>{" "}
+                  <code className="font-mono bg-white px-1.5 py-0.5 rounded border border-navy/10 text-navy">
+                    Zymic Bank
+                  </code>{" "}
+                  /{" "}
+                  <code className="font-mono bg-white px-1.5 py-0.5 rounded border border-navy/10 text-navy">
+                    123
+                  </code>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIdentifier("Zymic Bank");
+                    setPassword("123");
+                  }}
+                  className="text-flux font-semibold hover:underline shrink-0"
+                >
+                  Fill
+                </button>
+              </div>
+
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-navy/60 mb-1.5">
-                    Operator email
+                    Bank Name or Operator Email
                   </label>
                   <div className="relative">
                     <Building2 className="w-4 h-4 text-navy/40 absolute left-4 top-1/2 -translate-y-1/2" />
                     <input
-                      type="email"
+                      type="text"
                       autoComplete="username"
                       required
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
-                      placeholder="Enter operator email"
+                      placeholder="Zymic Bank or admin@zymicbank.ng"
                       className="w-full rounded-2xl bg-navy/[0.03] border border-navy/10 pl-11 pr-4 py-3 text-sm text-navy outline-none focus:border-flux focus:bg-white transition-colors"
                     />
                   </div>
@@ -311,9 +353,13 @@ export default function LoginPage() {
                     </>
                   )}
                 </button>
-                <button type="button" disabled={loading} onClick={handleDemo}
-                  className="w-full rounded-xl border border-navy/20 py-3 text-sm font-medium text-navy disabled:opacity-50">
-                  Enter demo
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={handleDemo}
+                  className="w-full rounded-full border border-navy/20 hover:bg-navy/[0.03] py-3 text-xs font-semibold text-navy transition-colors disabled:opacity-50"
+                >
+                  One-Click Demo Access (Zymic Bank / 123)
                 </button>
               </form>
             </div>

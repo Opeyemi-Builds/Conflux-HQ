@@ -11,6 +11,14 @@ const nextConfig: NextConfig = {
         destination: `${backendUrl}/api/v1/:path*`,
       },
       {
+        source: "/docs",
+        destination: `${backendUrl}/docs`,
+      },
+      {
+        source: "/openapi.json",
+        destination: `${backendUrl}/openapi.json`,
+      },
+      {
         source: "/hooks/:path*",
         destination: `${backendUrl}/hooks/:path*`,
       },
