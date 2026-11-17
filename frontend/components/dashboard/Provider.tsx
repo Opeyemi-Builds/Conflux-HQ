@@ -1,5 +1,4 @@
 "use client";
-import type { XResult } from "@/lib/social";
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -40,7 +39,6 @@ interface Ctx {
   rootCauses: { name: string; value: number }[];
   detectTrend: { d: string; min: number }[];
   addComplaint: (c: Partial<Complaint> & { text: string }) => Promise<void>;
-  pullSocialX: () => Promise<XResult>;
   investigate: (incidentId: string) => Promise<void>;
   detectNow: () => Promise<void>;
   syncing: boolean;
@@ -446,12 +444,6 @@ function AuthenticatedDashboard({ children, user }: { children: React.ReactNode;
     [fetchBackendData]
   );
 
-  const pullSocialX = useCallback(async () => {
-    const res = await api.pullXPosts(15);
-    await fetchBackendData();
-    return res;
-  }, [fetchBackendData]);
-
   const hourlySeries = useMemo<HourlyBucket[]>(() => {
     if (backendComplaints.length === 0) return [];
     const buckets = new Map<string, HourlyBucket>();
@@ -562,7 +554,6 @@ function AuthenticatedDashboard({ children, user }: { children: React.ReactNode;
         rootCauses,
         detectTrend,
         addComplaint,
-        pullSocialX,
         investigate,
         detectNow,
         syncing,

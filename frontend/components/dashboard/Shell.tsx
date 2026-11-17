@@ -12,7 +12,6 @@ import {
   List,
   Loader2,
   LogOut,
-  MapPin,
   Radio,
   Receipt,
   RefreshCw,
@@ -56,7 +55,6 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     { href: "/dashboard/social", label: "Social monitoring", icon: Radio },
     { href: "/dashboard/security", label: "Security queue", icon: ShieldAlert },
     { href: "/dashboard/settings/keys", label: "API keys", icon: KeyRound },
-    { href: "/dashboard/risk-map", label: "Geo Risk Map", icon: MapPin },
     { href: "/dashboard/audit", label: "Audit log", icon: ScrollText },
   ];
 

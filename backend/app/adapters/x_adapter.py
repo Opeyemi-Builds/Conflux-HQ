@@ -314,7 +314,15 @@ def parse_x_v2_payload(raw_payload: dict, *, synthetic: bool = False) -> SocialE
         username = users[0].get("username")
 
     author_ref = f"x_user:{username or author_id}" if (username or author_id) else None
-    public_metrics = data.get("public_metrics") or {}
+    raw_metrics = data.get("public_metrics") or {}
+    public_metrics = {}
+    for key in ("like_count", "retweet_count", "reply_count", "quote_count",
+                "impression_count", "impressions", "bookmark_count"):
+        if key in raw_metrics:
+            try:
+                public_metrics[key] = max(0, int(raw_metrics[key] or 0))
+            except (TypeError, ValueError):
+                continue
     matching_rules = raw_payload.get("matching_rules") or []
     rule_tags = [str(r["tag"]) for r in matching_rules if isinstance(r, dict) and r.get("tag")]
 

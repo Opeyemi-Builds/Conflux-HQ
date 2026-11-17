@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { describeXResult, type SocialAlias, type SocialAnalytics, type XResult } from "@/lib/social";
+import { type SocialAlias, type SocialAnalytics } from "@/lib/social";
 import { useDash } from "@/components/dashboard/Provider";
 import { Card, PageHeader, Stat } from "@/components/dashboard/ui";
 
@@ -19,7 +19,6 @@ export default function SocialPage() {
   const [aliases, setAliases] = useState<SocialAlias[] | null>(null);
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState("");
-  const [outcome, setOutcome] = useState<XResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
 
@@ -53,25 +52,16 @@ export default function SocialPage() {
     setAliases((current) => current?.map((alias, i) => i === index ? { ...alias, ...patch } : alias) ?? null);
   };
 
-  const pull = (replay: boolean) => run(async () => {
-    setOutcome(null);
-    setOutcome(await (replay ? api.replayXPosts() : api.pullXPosts()));
-    setRevision((value) => value + 1);
-  });
-
   return <div className="space-y-4">
-    <PageHeader title="Social monitoring" sub="Reputation signals and connector activity from recorded social receipts." />
+    <PageHeader title="Social monitoring" sub="Live reputation signals from stored social receipts. The server polls X automatically — no manual pull needed." />
     {error && <p role="alert" className="text-red-700">{error}</p>}
     <Card className="space-y-3 p-4">
       <h2 className="font-semibold">X connector</h2>
-      <p>{connector ? (connector.credentials_configured ? "Live X credentials configured. A successful pull verifies access." : "Live X credentials unavailable. Recorded replay is available.") : "Connector status unavailable."}</p>
+      <p>{connector ? (connector.credentials_configured ? "Live X credentials configured. The background poller collects mentions automatically." : "Live X credentials unavailable. New mentions arrive when the server is configured.") : "Connector status unavailable."}</p>
       {connector && <p className="text-sm">Reads today {connector.reads_today} of {connector.daily_post_limit}</p>}
       <div className="flex flex-wrap gap-2">
         <button className={action} disabled={busy || confirm} onClick={() => { setError(""); setRevision((value) => value + 1); }}>Refresh social data</button>
-        <button className={action} disabled={busy || confirm || user?.role === "manager"} onClick={() => pull(false)}>Pull live X</button>
-        <button className={action} disabled={busy || confirm || user?.role === "manager"} onClick={() => pull(true)}>Replay recorded X</button>
       </div>
-      {outcome && <p role="status">{describeXResult(outcome)}</p>}
     </Card>
     <Card className="space-y-3 p-4">
       <h2 className="font-semibold">Reputation over the last 24 hours</h2>
@@ -85,9 +75,36 @@ export default function SocialPage() {
           <Stat label="High reach" value={String(data.high_reach_posts)} />
           <Stat label="Reputation risk" value={String(data.reputation_risk_posts)} />
         </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Stat label="Impressions" value={String(data.total_impressions)} />
+          <Stat label="Avg reputation score" value={data.average_reputation_score != null ? String(data.average_reputation_score) : "—"} />
+        </div>
         <h3 className="font-semibold">Top flags</h3>
         <ul>{Object.entries(data.top_reputation_flags).map(([flag, count]) => <li key={flag}>{flag.replaceAll("_", " ")} · {count}</li>)}</ul>
         {Object.keys(data.top_reputation_flags).length === 0 && <p>No flags in this window.</p>}
+        {Object.keys(data.by_issue_type || {}).length > 0 && <>
+          <h3 className="font-semibold">Posts by issue</h3>
+          <ul>{Object.entries(data.by_issue_type).map(([issue, count]) => <li key={issue}>{issue.replaceAll("_", " ")} · {count}</li>)}</ul>
+        </>}
+        {Object.keys(data.by_platform || {}).length > 0 && <>
+          <h3 className="font-semibold">Posts by platform</h3>
+          <ul>{Object.entries(data.by_platform).map(([platform, count]) => <li key={platform}>{platform} · {count}</li>)}</ul>
+        </>}
+        {(data.top_posts || []).length > 0 && <>
+          <h3 className="font-semibold">Top posts by reach</h3>
+          <ol className="grid gap-2">
+            {data.top_posts.map((post) => <li key={`${post.platform}:${post.post_id}`} className="rounded border border-navy/10 p-2 text-sm">
+              <div className="flex flex-wrap gap-2 text-xs text-navy/60">
+                <span>{post.platform}</span>
+                <span>{post.engagement} engagement</span>
+                <span>{post.impressions} impressions</span>
+                {post.issue_type && <span>{post.issue_type.replaceAll("_", " ")}</span>}
+              </div>
+              {post.snippet && <p className="mt-1">{post.snippet}</p>}
+              {post.source_url && <a className="underline text-xs" href={post.source_url} target="_blank" rel="noreferrer">Open source</a>}
+            </li>)}
+          </ol>
+        </>}
         <details><summary className="cursor-pointer font-semibold">Hourly post velocity in UTC</summary>
           <ol className="mt-2 grid gap-1 text-sm sm:grid-cols-2">
             {data.hourly_velocity.map(({ bucket_start, posts }) => <li key={bucket_start}><time dateTime={bucket_start}>{bucket_start}</time> · {posts} posts</li>)}

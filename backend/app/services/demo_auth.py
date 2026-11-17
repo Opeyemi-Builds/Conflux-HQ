@@ -52,6 +52,11 @@ def login(db: Session, username: str, password: str) -> dict:
                                   full_name="Demo Operator", role=UserRole.BANK_ADMIN,
                                   status=MemberStatus.ACTIVE)
                 db.add(profile)
+            db.flush()
+            # Tag the demo bank for live social monitoring (same as onboarding).
+            from app.services.social_aliases import seed_default_aliases
+
+            seed_default_aliases(db, bank.id, bank.name)
             db.commit()
         except IntegrityError:
             # A parallel first login may have provisioned the same fixed records.

@@ -71,6 +71,11 @@ def register_bank(db: Session, sb: SupabaseAuth, data: RegisterBankRequest) -> t
         )
         db.add(bank)
         db.flush()
+        # Tag the bank for live social monitoring immediately at onboarding.
+        from app.services.social_aliases import seed_default_aliases
+
+        seed_default_aliases(db, bank.id, bank.name)
+        db.flush()
         profile = Profile(
             id=uuid.UUID(result.user_id), bank_id=bank.id, email=email,
             full_name=data.admin_full_name, role=UserRole.BANK_ADMIN, status=MemberStatus.ACTIVE,

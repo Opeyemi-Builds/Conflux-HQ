@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     ingestion_hash_secret: str = "conflux-default-ingestion-hash-secret-min-32-chars"
     # Safeguard for Forge: disable live external social network calls when false
     social_live_enabled: bool = True
+    # Server-side auto-poll: when true and X_BEARER_TOKEN is set, the API process
+    # polls live X mentions for every tagged active bank underneath (no UI action).
+    social_auto_pull: bool = True
+    social_poll_seconds: float = 90.0
 
     demo_mode: bool = True
     demo_username: str = "Zymic Bank"

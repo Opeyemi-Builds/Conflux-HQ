@@ -61,14 +61,31 @@ class TrendsResponse(WindowResponse):
     buckets: list[TrendBucket]
 
 
+class TopSocialPost(BaseModel):
+    post_id: str
+    platform: str
+    source_url: str | None = None
+    engagement: int
+    impressions: int
+    issue_type: str | None = None
+    reputation_flags: list[str] = Field(default_factory=list)
+    reputation_score: float = 0.0
+    received_at: datetime
+    snippet: str | None = None
+
+
 class SocialAnalyticsResponse(WindowResponse):
     total_posts: int
     unique_authors: int
     total_engagement: int
+    total_impressions: int
     high_reach_posts: int
     reputation_risk_posts: int
     average_reputation_score: float
     top_reputation_flags: dict[str, int]
+    by_issue_type: dict[str, int]
+    by_platform: dict[str, int]
+    top_posts: list[TopSocialPost]
     hourly_velocity: list[dict]
 
 
@@ -211,7 +228,14 @@ def breakdown(user: AuthUser, db: DbSession, hours: Hours = 24, at: Anchor = Non
 
 @router.get("/social", response_model=SocialAnalyticsResponse)
 def social_analytics(user: AuthUser, db: DbSession, hours: Hours = 24, at: Anchor = None) -> dict:
-    """Summarize received social posts, engagement and reputation-risk velocity."""
+    """Summarize received social posts: impressions, top posts, issue mix and velocity.
+
+    Powers the visual Social monitoring page (no manual pull/replay): which posts
+    have the highest impressions/engagement and which issue people complain about
+    most, straight from stored SocialReceipts + linked complaints for this bank.
+    """
+    from app.models import Complaint as _Complaint
+
     window = _window(hours, at)
     rows = db.scalars(
         select(SocialReceipt).where(
@@ -220,16 +244,29 @@ def social_analytics(user: AuthUser, db: DbSession, hours: Hours = 24, at: Ancho
             SocialReceipt.received_at < window["window_end"],
         )
     ).all()
+    complaint_map: dict[str, _Complaint] = {}
+    if rows:
+        cids = list({row.complaint_id for row in rows if row.complaint_id is not None})
+        if cids:
+            for c in db.scalars(select(_Complaint).where(_Complaint.id.in_(cids))).all():
+                complaint_map[str(c.id)] = c
     authors = set()
     total_engagement = 0
+    total_impressions = 0
     high_reach = 0
     risk_posts = 0
     score_total = 0.0
     flags: dict[str, int] = {}
+    by_issue: dict[str, int] = {}
+    by_platform: dict[str, int] = {}
     buckets: dict[datetime, int] = {}
+    scored: list[dict] = []
     for row in rows:
         metrics = row.public_metrics or {}
-        total_engagement += sum(max(0, int(metrics.get(key, 0) or 0)) for key in ("like_count", "retweet_count", "reply_count", "quote_count"))
+        engagement = sum(max(0, int(metrics.get(key, 0) or 0)) for key in ("like_count", "retweet_count", "reply_count", "quote_count"))
+        impressions = max(0, int(metrics.get("impression_count", 0) or metrics.get("impressions", 0) or 0))
+        total_engagement += engagement
+        total_impressions += impressions
         if "high_reach" in (row.reputation_flags or []):
             high_reach += 1
         if row.reputation_score >= 0.35:
@@ -237,22 +274,47 @@ def social_analytics(user: AuthUser, db: DbSession, hours: Hours = 24, at: Ancho
         score_total += float(row.reputation_score or 0)
         for flag in row.reputation_flags or []:
             flags[flag] = flags.get(flag, 0) + 1
+        complaint = complaint_map.get(str(row.complaint_id))
+        issue = None
+        if complaint is not None and complaint.issue_type is not None:
+            issue = complaint.issue_type.value if hasattr(complaint.issue_type, "value") else str(complaint.issue_type)
+            by_issue[issue] = by_issue.get(issue, 0) + 1
+        else:
+            by_issue["unclassified"] = by_issue.get("unclassified", 0) + 1
+        by_platform[row.platform] = by_platform.get(row.platform, 0) + 1
         bucket = row.received_at.astimezone(timezone.utc).replace(minute=0, second=0, microsecond=0)
         buckets[bucket] = buckets.get(bucket, 0) + 1
         if row.author_ref_hash:
             authors.add(row.author_ref_hash)
         else:
             authors.add(f"{row.bank_id}:{row.post_id}")
+        scored.append({
+            "post_id": row.post_id,
+            "platform": row.platform,
+            "source_url": row.source_url,
+            "engagement": engagement,
+            "impressions": impressions,
+            "issue_type": issue,
+            "reputation_flags": list(row.reputation_flags or []),
+            "reputation_score": float(row.reputation_score or 0),
+            "received_at": row.received_at,
+            "snippet": (complaint.text[:220] if complaint is not None and complaint.text else None),
+        })
+    scored.sort(key=lambda p: (-p["impressions"], -p["engagement"]))
     cursor = window["window_start"].replace(minute=0, second=0, microsecond=0)
     velocity = []
     while cursor < window["window_end"]:
         velocity.append({"bucket_start": cursor, "posts": buckets.get(cursor, 0)})
         cursor += timedelta(hours=1)
     return {**window, "total_posts": len(rows), "unique_authors": len(authors),
-            "total_engagement": total_engagement, "high_reach_posts": high_reach,
+            "total_engagement": total_engagement, "total_impressions": total_impressions,
+            "high_reach_posts": high_reach,
             "reputation_risk_posts": risk_posts,
             "average_reputation_score": round(score_total / len(rows), 4) if rows else 0.0,
             "top_reputation_flags": dict(sorted(flags.items(), key=lambda item: (-item[1], item[0]))[:10]),
+            "by_issue_type": by_issue,
+            "by_platform": by_platform,
+            "top_posts": scored[:12],
             "hourly_velocity": velocity}
 
 

@@ -26,15 +26,12 @@ from app.models.enums import BankStatus, Channel, IssueType, JobKind, Sentiment,
 from app.services.audit import log_event
 from app.services.complaint_service import _enqueue_for_complaint
 from app.services.demo_auth import DEMO_BANK_ID
+from app.services.social_aliases import seed_default_aliases
 from app.services.social_intake import AliasBatch, SocialEvent, analyze, matches, reputation_signals
 from app.services.worker import drain_jobs, enqueue_job
 
 router = APIRouter(prefix="/social", tags=["social monitoring"])
 _PLATFORM_CHANNEL = {"x": Channel.X, "instagram": Channel.INSTAGRAM, "facebook": Channel.FACEBOOK}
-_DEFAULTS = {
-    "zymic bank": [("name", None), ("contextual", None), ("handle", "x"), ("hashtag", "x")],
-    "apex demo bank": [("name", None), ("handle", "x"), ("hashtag", "x")],
-}
 
 
 class XReplayRequest(BaseModel):
@@ -61,27 +58,9 @@ class XSyncRulesRequest(BaseModel):
     existing_remote_rules: list[dict] | None = None
 
 
-def _seed_defaults(db, bank_id: uuid.UUID, bank_name: str):
-    name = " ".join(bank_name.casefold().split())
-    entries = [(name, "name", None)]
-    short, handle, hashtag = "zymic", "@zymicbank", "#zymicbank"
-    if name != "zymic bank":
-        clean_slug = "".join(c for c in name if c.isalnum())[:15] or "demobank"
-        short, handle, hashtag = clean_slug, f"@{clean_slug}", f"#{clean_slug}"
-    for kind, platform in _DEFAULTS.get(name, [("name", None), ("handle", "x"), ("hashtag", "x")]):
-        value = {"name": name, "contextual": short, "handle": handle, "hashtag": hashtag}.get(kind, name)
-        entries.append((value.casefold(), kind, platform))
-    if name == "zymic bank":
-        entries.extend([
-            ("@zymic_help", "handle", "x"),
-            ("@zymic_support", "handle", "x"),
-            ("@confluxbankhq", "handle", "x"),
-        ])
-    existing = {a.value for a in db.scalars(select(BankAlias).where(BankAlias.bank_id == bank_id)).all()}
-    for value, kind, platform in entries:
-        if value not in existing:
-            existing.add(value)
-            db.add(BankAlias(bank_id=bank_id, value=value, kind=kind, platform=platform))
+def _seed_defaults(db, bank_id: uuid.UUID, bank_name: str) -> int:
+    """Tag a bank for monitoring (shared helper; onboarding seeds this automatically)."""
+    return seed_default_aliases(db, bank_id, bank_name)
 
 
 def require_adapter(authorization: str | None = Header(default=None)):

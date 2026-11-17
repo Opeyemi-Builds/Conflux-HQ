@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ConfluxHQ — Rebuilt Pitch Deck</title>
+<style>
+:root{color-scheme:light;--navy:#1E2761;--coral:#F96167;--teal:#028090;--ink:#141A33;--muted:#5B6478;--bg:#FFFFFF;--card:#F4F5FA}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Calibri,sans-serif;background:#0F1430;color:var(--ink)}
+.top{position:sticky;top:0;z-index:5;background:#0F1430;color:#fff;padding:10px 18px;display:flex;gap:12px;align-items:center}
+.top b{font-size:15px}.top span{font-size:12px;opacity:.8}.top .sp{flex:1}.top button{background:#fff;border:0;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer}
+.wrap{max-width:1080px;margin:0 auto;padding:18px}
+.slide{background:var(--bg);border-radius:16px;padding:36px 36px 28px;margin:18px 0;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+.slide.dark{background:var(--navy);color:#fff}.slide.dark .muted{color:#CADCFC}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);font-weight:800;margin-bottom:10px}
+.dark .kicker{color:#7FE3D0}
+h1{font-size:40px;line-height:1.05;margin:0 0 12px}h2{font-size:30px;margin:0 0 12px;line-height:1.15}
+p{font-size:16px;line-height:1.55}.muted{color:var(--muted);font-size:13px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}@media(max-width:800px){.grid2{grid-template-columns:1fr}h1{font-size:32px}h2{font-size:24px}.slide{padding:22px}}
+.card{background:var(--card);border-radius:12px;padding:16px}.dark .card{background:rgba(255,255,255,.08)}
+.stat{font-size:42px;font-weight:900}.pill{display:inline-block;background:var(--teal);color:#fff;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:800}
+.pill.coral{background:var(--coral)}.pills{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}@media(max-width:800px){.flow{grid-template-columns:1fr 1fr}}
+.step{background:var(--card);border-radius:12px;padding:14px}.step b{display:block;margin-bottom:6px}.step span{font-size:13px;color:var(--muted)}
+code.snip{display:block;background:#0B102A;color:#D8E6FF;border-radius:12px;padding:14px;font-size:13px;line-height:1.5;white-space:pre-wrap}
+table{width:100%;border-collapse:collapse;font-size:14px;margin-top:10px}th,td{text-align:left;padding:10px;border-bottom:1px solid #E3E6F0}th{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.note{border-left:4px solid var(--teal);padding:10px 12px;background:#EFF8F7;border-radius:0 10px 10px 0;font-size:14px;margin-top:14px;color:#123}
+.dark .note{background:rgba(255,255,255,.1);color:#fff;border-color:#7FE3D0}
+.foot{display:flex;justify-content:space-between;align-items:center;margin-top:18px;font-size:12px;color:var(--muted)}.dark .foot{color:#CADCFC}
+a{color:inherit}
+@media print{.top{display:none}body{background:#fff}.wrap{max-width:none;padding:0}.slide{box-shadow:none;break-inside:avoid;border:1px solid #ddd}}
+</style>
+</head>
+<body>
+<div class="top"><b>ConfluxHQ — Rebuilt Deck</b><span>Track 1 · Payments & Financial Infrastructure · Team Zymic</span><div class="sp"></div><button onclick="window.print()">Print / Save PDF</button></div>
+<div class="wrap">
+
+<div class="slide dark">
+<div class="kicker">Access Youth Tech Forge · Theme 1</div>
+<h1>Payment failures show up as complaints first. Conflux HQ catches them before they trend.</h1>
+<p>An AI complaint-intelligence layer for banks. Not another dashboard — a feed your ops dashboard can hear.</p>
+<div class="pills"><span class="pill coral">LIVE: failed_transfer spike · Switch A · 88% fail</span><span class="pill">Pidgin · Yoruba · Hausa · Igbo · English</span></div>
+<div class="foot"><span>Team Zymic</span><span>1 / 12</span></div>
+</div>
+
+<div class="slide">
+<div class="kicker">The gap</div>
+<h2>The dashboard is green. The customers are not.</h2>
+<div class="grid2">
+<div><p><b>2:07 PM Friday.</b> Amaka sends ₦50,000. App says “Successful.” She is debited. Receiver hears nothing.</p>
+<p>Bank side: servers up, health checks 200 OK, nothing red.</p>
+<div class="card">“Una don debit me twice, my money never enter. Na so una dey do?” — Amaka, on X</div></div>
+<div><div class="card"><b>Bank ops sees</b><br>✓ Servers up<br>✓ 200 OK<br>✓ No red alert</div><div class="card" style="margin-top:10px"><b>User side sees</b><br>✕ Debited, not credited<br>✕ Airtime / transfer failing<br>✕ Login gating money</div>
+<p class="muted">Yes — transfer failure is settlement infrastructure. Login failure is access infrastructure when it gates money movement.</p></div>
+</div>
+<div class="foot"><span>Current state vs shortfall</span><span>2 / 12</span></div>
+</div>
+
+<div class="slide">
+<div class="kicker">Why banks miss it</div>
+<h2>Three teams. Three tools. One missed outage.</h2>
+<div class="grid2">
+<div class="card"><b>Social team</b><br>Sees tweets.</div>
+<div class="card"><b>Call centre</b><br>Sees angry calls.</div>
+</div>
+<div class="grid2" style="margin-top:10px"><div class="card"><b>Email team</b><br>Sees ticket pile.</div><div class="card"><b>Result</b><br>Trending first, CBN refund clock ticking, WhatsApp group told “I’m moving banks.”</div></div>
+<div class="note">MTN example: backend says airtime sale OK, user side keeps failing. Backend-green ≠ user-success. That is the operational resilience gap.</div>
+<div class="foot"><span>Infrastructure, not UI</span><span>3 / 12</span></div>
+</div>
+
+<div class="slide">
+<div class="kicker">Cost of finding out late</div>
+<h2>The cost of finding out late</h2>
+<div class="grid2">
+<div><div class="stat">23,129</div><p>Complaints to CBN, 2025 — up 10.53% from 20,925. Refunds ordered: <b>₦19.12bn + $329.3M</b>. Naira roughly doubled from ₦9.66bn.</p></div>
+<div><div class="stat" style="color:var(--coral)">₦430M</div><p>21 penalties for slow handling. Recurring: failed transactions, unauthorised deductions, delayed refunds.</p></div>
+</div>
+<div class="note"><b>Thesis:</b> Fraud losses falling (₦52.26bn 2024, down 51% — NIBSS) while complaints rise. Pain moved from theft to failed / disputed / delayed. That is where Conflux works. <br><span class="muted">Sources: CBN 2025 annual report as reported by Nairametrics / Legit / Prime Business Africa — verify primary table before final. NIBSS fraud; bars scaled within panel.</span></div>
+<div class="foot"><span>Why now</span><span>4 / 12</span></div>
+</div>
+
+<div class="slide">
+<div class="kicker">Solution</div>
+<h2>Conflux HQ turns complaints into telemetry</h2>
+<div class="flow">
+<div class="step"><b>1. Detect</b><span>One feed X/IG/FB + calls + branch. AI reads English, Pidgin, Yoruba, Hausa, Igbo.</span></div>
+<div class="step"><b>2. Investigate</b><span>Math flags spike (median + MAD, 15-min). Agent checks switch logs + releases.</span></div>
+<div class="step"><b>3. Decide</b><span>Plain-language cause, ranked by volume, growth, money at risk. Rules engine if cloud down.</span></div>
+<div class="step"><b>4. Act</b><span>Drafts customer message + IT ticket. Human approves money moves.</span></div>
+</div>
+<div class="note">Social listening is the sensor. Value is detection + cause + handoff. Detection = math. Action = human.</div>
+<div class="foot"><span>Detect → Investigate → Decide → Act</span><span>5 / 12</span></div>
+</div>
+
+<div class="slide">
+<div class="kicker">Outcome</div>
+<h2>Same Friday. This time, the bank spoke first.</h2>
+<div class="grid2">
+<div class="card"><b>10:00</b> Release v4.2.1 ships<br><b>10:12</b> Spike flagged<br><b>10:14</b> Incident + draft ready<br><b>10:16</b> Human approves → holding SMS out</div>
+<div><p>✓ Caught early — before trend<br>✓ Told first — customer hears from bank<br>✓ Safe by design — person approves money</p><p class="muted">Demo proof: 88% failure on Switch A, ₦1.8M at risk.</p></div>
+</div>
+<div class="foot"><span>Before escalation</span><span>6 / 12</span></div>
+</div>
+
+<div class="slide dark">
+<div class="kicker">Differentiator</div>
+<h2>We don’t give banks another dashboard. We give them a feed.</h2>
+<div class="grid2">
+<div><code class="snip">GET /machine/updates?since=&lt;cursor&gt;
+Authorization: Bearer cfx_api_...
+
+{
+  "bank_id": "...",
+  "cursor": "2026-...",
+  "collections": ["complaints","incidents",
+    "drafts","actions","investigations","audit"],
+  "items": [...]
+}</code>
+<p class="muted" style="color:#CADCFC">5-sec cursor poll · webhooks HMAC-SHA256 x-forge-signature ±5min · Try-It explorer · plugs into existing bank dashboard</p></div>
+<div><p>Banks already have dashboards. Conflux is the friendly API that lands inside theirs. Grouped + categorized complaints compound into patterns.</p><div class="pills"><span class="pill">handoff, not login</span></div></div>
+</div>
+<div class="foot"><span>Infrastructure = integrable</span><span>7 / 12</span></div>
+</div>
+
+<div class="slide">
+<div class="kicker">Product proof</div>
+<h2>One feed. Any language. Humans approve.</h2>
+<div class="grid2">
+<div class="card"><b>Live overview</b><br>Failed-transfer spike vs baseline.</div>
+<div class="card"><b>Explorer</b><br>Pidgin + Yoruba by issue / severity / region.</div>
+</div>
+<div class="grid2" style="margin-top:10px"><div class="card"><b>Incident view</b><br>Money at risk + priority score + approval gate. Auto money movement blocked (403).</div><div class="card"><b>Audit log</b><br>Every classification, spike, approval stored.</div></div>
+<p class="muted">Working prototype end-to-end on synthetic data — 1,000 complaints, 5,000 txns, planted release. All simulated.</p>
+<div class="foot"><span>Prototype core flow</span><span>8 / 12</span></div>
+</div>
+
+<div class="slide">
+<div class="kicker">Why existing tools miss it</div>
+<h2>Why existing tools miss it</h2>
+<table><tr><th>Tool</th><th>Sees</th><th>Misses</th></tr>
+<tr><td>APM (Datadog / Grafana)</td><td>Uptime</td><td>Whether money arrived</td></tr>
+<tr><td>Social listening</td><td>Sentiment</td><td>Release / switch cause</td></tr>
+<tr><td>Ticketing / CRM</td><td>One case</td><td>Pattern across cases</td></tr>
+<tr><td>Fraud systems</td><td>Theft</td><td>Failed-transaction waves</td></tr>
+<tr><td>Manual</td><td>What staff read</td><td>Nigerian languages at scale</td></tr>
+<tr><td><b>Conflux</b></td><td><b>Complaints as telemetry</b></td><td><b>— adds cause + approved fix</b></td></tr></table>
+<div class="foot"><span>One question: did settlement complete?</span><span>9 / 12</span></div>
+</div>
+
+<div class="slide">
+<div class="kicker">Market</div>
+<h2>Every transfer is a chance to fail</h2>
+<div class="grid2"><div><div class="stat">~11bn</div><p>Instant NIP transfers, 2024. ₦1.07 quadrillion moved (NIBSS). Each one can fail.</p></div><div><p><b>Now:</b> Nigerian banks<br><b>Next:</b> OPay / Moniepoint / PalmPay, telcos, mobile money<br><b>Later:</b> more African markets + languages</p><p class="muted">Adjacent: social listening $9.15bn 2024, 14.3% CAGR — we monetize the operational half.</p></div></div>
+<div class="foot"><span>Scale path</span><span>10 / 12</span></div>
+</div>
+
+<div class="slide">
+<div class="kicker">Business + progress</div>
+<h2>Who pays, how, and why they buy</h2>
+<div class="grid2"><div><p><b>Who pays:</b> banks, fintechs, mobile-money operators. Buyer: Head Digital Banking / Ops Risk.</p><p><b>How:</b> B2B SaaS, tiered by complaint volume + channels. Each bank / channel / module = recurring.</p><p><b>Why:</b> meet CBN timelines, keep customers hearing from bank first, ease call-centre load.</p></div><div><div class="card"><b>Built</b><br>complaint → spike → cause → drafts → approval + feed / incident / security / audit + adapters</div><div class="card" style="margin-top:10px"><b>Next</b><br>1 live pilot → more channels / telcos → settlement + reconciliation link</div></div></div>
+<div class="foot"><span>Beneficiary = customer · Payer = bank</span><span>11 / 12</span></div>
+</div>
+
+<div class="slide dark">
+<div class="kicker">Ask</div>
+<h2>We catch the failure before it trends.</h2>
+<div class="pills"><span class="pill">Speaks Nigerian</span><span class="pill">Detects with math</span><span class="pill coral">Humans approve every naira</span></div>
+<p>Looking for one pilot partner to run Conflux HQ on live complaint channels.</p>
+<div class="note">ConfluxHQ is the early-warning layer for money movement — it hears the user when the system can’t feel itself failing.<br><span style="opacity:.8">Alt: the user-side settlement observability banks are missing.</span></div>
+<p class="muted" style="color:#CADCFC">Team Zymic · contact + demo: seed 42 → detect → investigate → match → approve → poll /machine/updates</p>
+<div class="foot"><span>Trust: PII masked · tenant-isolated · MAD not LLM · 403 on money · audit log</span><span>12 / 12</span></div>
+</div>
+
+</div>
+</body>
+</html>

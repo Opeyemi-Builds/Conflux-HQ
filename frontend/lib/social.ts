@@ -4,34 +4,32 @@ export interface SocialAlias {
   platform: "x" | "instagram" | "facebook" | null;
 }
 
+export interface TopSocialPost {
+  post_id: string;
+  platform: string;
+  source_url: string | null;
+  engagement: number;
+  impressions: number;
+  issue_type: string | null;
+  reputation_flags: string[];
+  reputation_score: number;
+  received_at: string;
+  snippet: string | null;
+}
+
 export interface SocialAnalytics {
   window_start: string;
   window_end: string;
   total_posts: number;
   unique_authors: number;
   total_engagement: number;
+  total_impressions: number;
   high_reach_posts: number;
   reputation_risk_posts: number;
+  average_reputation_score?: number;
   top_reputation_flags: Record<string, number>;
+  by_issue_type: Record<string, number>;
+  by_platform: Record<string, number>;
+  top_posts: TopSocialPost[];
   hourly_velocity: { bucket_start: string; posts: number }[];
-}
-
-export interface XResult {
-  source?: string;
-  reason?: string;
-  fetched?: number;
-  replayed?: number;
-  accepted_count?: number;
-  accepted?: number | boolean;
-  complaints_created?: number;
-  duplicates?: number;
-}
-
-export function describeXResult(result: XResult): string {
-  if (result.source !== "live_recent_search" && result.source !== "live_filtered_stream" &&
-      result.source !== "replay_fallback" && result.source !== "recorded_replay") {
-    return `X pull failed · ${result.reason ?? result.source ?? "Unknown connector outcome"}`;
-  }
-  const source = result.source.startsWith("live") ? "Live X" : "Recorded X replay";
-  return `${source} · ${result.fetched ?? result.replayed ?? 0} posts read · ${result.complaints_created ?? 0} complaints created · ${result.duplicates ?? 0} duplicates`;
 }

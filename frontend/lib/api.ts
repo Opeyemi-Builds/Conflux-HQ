@@ -1,4 +1,4 @@
-import type { SocialAlias, SocialAnalytics, XResult } from "./social";
+import type { SocialAlias, SocialAnalytics } from "./social";
 import type { CaseUpdate, IncidentTimelineItem, ManualCase, MatchResult, PaymentException, Proposal, ProposalInput, ReconciliationSummary } from "./reconciliation";
 export type { IncidentTimelineItem } from "./reconciliation";
 
@@ -752,25 +752,6 @@ class ConfluxApiClient {
   replaceAliases(aliases: SocialAlias[]) {
     return this.request<{ items: SocialAlias[] }>("/api/v1/social/aliases", {
       method: "PUT", body: JSON.stringify({ aliases }),
-    });
-  }
-
-  async replayXPosts(): Promise<XResult> {
-    const result = await this.request<XResult>("/api/v1/social/x/replay", {
-      method: "POST", body: JSON.stringify({ limit: 15 }),
-    });
-    return { ...result, source: "recorded_replay" };
-  }
-
-  async pullXPosts(maxResults = 15, fallbackToReplay = false): Promise<XResult> {
-    return this.request("/api/v1/social/x/pull", {
-      method: "POST",
-      body: JSON.stringify({
-        mode: "recent_search",
-        max_results: maxResults,
-        fallback_to_replay: fallbackToReplay,
-        auto_drain: true,
-      }),
     });
   }
 

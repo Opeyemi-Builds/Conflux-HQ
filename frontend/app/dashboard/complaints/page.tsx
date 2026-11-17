@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Search, Send, MessageSquarePlus, Loader2, RefreshCw } from "lucide-react";
-import { describeXResult } from "@/lib/social";
+import { Search, Send, MessageSquarePlus, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { api } from "@/lib/api";
@@ -10,7 +9,7 @@ import { Card, IssueBadge, PageHeader, SeverityBadge, Tag, Td, TableWrap, Th } f
 import { ISSUE_LABEL, type Channel, type Complaint, type IssueType } from "@/lib/types";
 
 export default function Complaints() {
-  const { addComplaint, pullSocialX, user } = useDash();
+  const { addComplaint, user } = useDash();
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [offset, setOffset] = useState(0);
   const [channel, setChannel] = useState("");
@@ -28,9 +27,7 @@ export default function Complaints() {
   const [channelInput, setChannelInput] = useState<Channel>("In-app");
   const [regionInput, setRegionInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isPullingX, setIsPullingX] = useState(false);
   const [submitNotice, setSubmitNotice] = useState<string | null>(null);
-  const [pullNotice, setPullNotice] = useState<string | null>(null);
 
   const queryKey = JSON.stringify([channel, issue, region, fraud, since, until, offset, revision]);
   const loading = queryKey !== resultKey;
@@ -85,21 +82,6 @@ export default function Complaints() {
     }
   };
 
-  const handlePullX = async () => {
-    if (isPullingX) return;
-    setIsPullingX(true);
-    setPullNotice(null);
-    try {
-      const res = await pullSocialX();
-      setPullNotice(describeXResult(res));
-      setRevision((value) => value + 1);
-    } catch {
-      setPullNotice("Could not pull X mentions. Try again.");
-    } finally {
-      setIsPullingX(false);
-    }
-  };
-
   const sel =
     "rounded-full bg-white border border-navy/[0.08] px-4 py-2.5 text-sm text-navy outline-none focus:border-flux";
 
@@ -108,30 +90,13 @@ export default function Complaints() {
       {submitNotice && <p role="status">{submitNotice}</p>}
       <PageHeader
         title="Complaint explorer"
-        sub="Bank complaint records with server filters. Text and severity filters apply to the current page."
+        sub="Live bank complaint records with server filters. Text and severity filters apply to the current page."
         right={
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={handlePullX}
-              disabled={isPullingX || user?.role === "manager"}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-navy text-white text-xs font-semibold hover:bg-navy-600 transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isPullingX ? "animate-spin text-flux" : "text-flux"}`} />
-              {isPullingX ? "Pulling X Stream…" : "Pull X Mentions"}
-            </button>
             <Tag tone="navy">{loading || listError ? "—" : complaints.length} records on page</Tag>
           </div>
         }
       />
-
-      {pullNotice && (
-        <div className="mb-4 px-4 py-2.5 rounded-2xl bg-flux/10 border border-flux/20 text-xs font-semibold text-navy flex items-center justify-between">
-          <span>{pullNotice}</span>
-          <button onClick={() => setPullNotice(null)} className="text-navy/50 hover:text-navy">
-            Dismiss
-          </button>
-        </div>
-      )}
 
       <Card className="p-5 mb-4">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">

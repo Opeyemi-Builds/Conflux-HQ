@@ -1,0 +1,73 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Export Competitive Table JPG</title>
+<style>body{margin:0;background:#111;color:#fff;font-family:Arial,sans-serif;text-align:center}canvas{max-width:95vw;height:auto;margin:16px auto;background:#fff;display:block;border-radius:8px}button{font-size:18px;font-weight:800;padding:14px 28px;border-radius:12px;border:0;background:#028090;color:#fff;cursor:pointer;margin:0 0 24px}button:hover{background:#026a78}p{opacity:.7}</style>
+</head><body>
+<h2>ConfluxHQ — Competitive Table → JPG</h2>
+<p>Tap the button to download slide-size JPG (1920×1080).</p>
+<button id="dl">Download JPG</button>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script>
+const cv=document.getElementById('c'),x=cv.getContext('2d');
+function R(px,py,w,h,fill,stroke,lw,r){x.beginPath();x.fillStyle=fill;if(r){x.roundRect(px,py,w,h,r);x.fill();}else{x.fillRect(px,py,w,h);}if(stroke){x.strokeStyle=stroke;x.lineWidth=lw||1;if(r){x.roundRect(px,py,w,h,r);x.stroke();}else{x.strokeRect(px,py,w,h);}}}
+function T(t,px,py,size,color,bold,align){x.fillStyle=color;x.font=(bold?'bold ':'')+size+'px Arial';x.textAlign=align||'left';x.textBaseline='alphabetic';x.fillText(t,px,py);}
+// bg
+x.fillStyle='#fff';x.fillRect(0,0,1920,1080);
+x.fillStyle='#1E2761';x.fillRect(0,0,1920,8);
+T('WHY CONFLUXHQ WINS',80,78,22,'#028090',true);x.save();x.letterSpacing='3px';x.restore();
+T('Others see a slice. We see whether money arrived.',80,130,46,'#1E2761',true);
+T('Complaints as live telemetry + cause + human-approved fix — delivered as a feed, not another dashboard.',80,168,23,'#5B6478');
+// header
+R(80,205,1760,62,'#1E2761',null,0,12);x.save();x.beginPath();x.rect(80,205,1760,62);x.clip();T('WHO ELSE',110,243,19,'#fff',true);T('WHAT THEY SEE',420,243,19,'#fff',true);T('WHERE THEY FALL SHORT',870,243,19,'#fff',true);T('CONFLUXHQ EDGE',1390,243,19,'#fff',true);x.restore();
+const rows=[
+['APM — Datadog / Grafana','Servers, uptime, 200 OK','Servers, uptime, 200 OK','Backend green while users are|debited, not credited.','Failed-transfer spike vs|baseline in minutes.'],
+['Social listening','Mentions, sentiment','Brandwatch / Sprinklr','No release / switch cause. No at-risk|rank. English-only.','Pidgin, Yoruba, Hausa, Igbo|+ cause + severity.'],
+['Ticketing / CRM','One case at a time','Zendesk / Freshdesk','Misses pattern across|thousands of cases.','Grouped + categorized —|patterns compound.'],
+['Fraud systems','Theft, scams','In-house risk tools','Misses failed-transaction waves|— today’s pain is failed / delayed.','Fraud queue + settlement-|failure detection together.'],
+['Manual monitoring','What staff happen to read','Social + call centre','3 teams, 3 tools. Trending first,|CBN clock ticking.','One feed, 5-sec API poll into|the bank’s own dashboard.']];
+let y=275;
+rows.forEach((r,i)=>{
+ const bg=i%2===0?'#F7F8FC':'#FFFFFF';
+ R(80,y,1760,92,bg,'#E2E6F0',1,0);
+ T(r[0],110,y+30,19,'#141A33',true);
+ T(r[2],110,y+55,17,'#5B6478');
+ T(r[1].split('|')[0]||r[1],420,y+30,18,'#141A33');
+ const m=(r[3].includes('|')?r[3].split('|'):[r[3]]);
+ T(m[0],870,y+30,18,'#141A33');if(m[1])T(m[1],870,y+55,18,'#141A33');
+ const e=(r[4].includes('|')?r[4].split('|'):[r[4]]);
+ T(e[0],1390,y+30,18,'#028090',true);if(e[1])T(e[1],1390,y+55,18,'#028090',true);
+ y+=92;
+});
+// win row
+R(80,735,1760,92,'#EFF8F7','#028090',2,12);
+T('CONFLUXHQ — early-warning layer',110,765,19,'#1E2761',true);
+T('Detect with math · Humans approve every naira',110,790,17,'#028090');
+T('Did settlement complete',420,765,18,'#1E2761',true);
+T('for users, right now?',420,790,18,'#1E2761',true);
+T('—',870,775,20,'#1E2761');
+T('Math flags spike, agent finds',1390,765,18,'#1E2761',true);
+T('cause. Full audit log.',1390,790,18,'#1E2761',true);
+// dividers
+x.strokeStyle='#E2E6F0';x.lineWidth=1;
+[[400,275,827],[850,275,827],[1370,275,827]].forEach(([a,b,c])=>{x.beginPath();x.moveTo(a,b);x.lineTo(a,c);x.stroke();});
+// moat
+const moats=[['TECHNOLOGY','Median + MAD detection,','rules fallback, HMAC, 403.'],['DATA','Volume + growth + N at-risk.','Sharper per bank, isolated.'],['PARTNERSHIPS','1 pilot → fintechs, telcos,','mobile money → regulator.'],['COSTS','SaaS per volume + channels.','Cheaper than N430M fines.']];
+let mx=80;
+moats.forEach((m,i)=>{
+ const fill=i===3?'#F96167':'#1E2761';
+ R(mx,850,i===3?440:425,120,fill,null,0,12);
+ const acc=i===3?'#FFFFFF':'#7FE3D0';
+ T(m[0],mx+22,880,17,acc,true);
+ T(m[1],mx+22,905,17,'#FFFFFF');T(m[2],mx+22,928,17,'#FFFFFF');
+ mx+=i===3?0:440;
+});
+T('Team Zymic · Track 1 — Payments & Financial Infrastructure',80,1005,16,'#8A93A8');
+T('NIBSS · CBN 2025 (verify primary table)',1840,1005,16,'#8A93A8',false,'right');
+document.getElementById('dl').onclick=()=>{
+ const a=document.createElement('a');
+ a.download='confluxhq-competitive-table-1920x1080.jpg';
+ a.href=cv.toDataURL('image/jpeg',0.95);
+ a.click();
+};
+</script>
+</body></html>

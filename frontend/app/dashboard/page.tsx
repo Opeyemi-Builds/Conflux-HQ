@@ -3,25 +3,23 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  Activity,
   AlertTriangle,
   ArrowRight,
-  DatabaseZap,
   KeyRound,
   Loader2,
   Pause,
   Play,
-  Radio,
   ShieldAlert,
+  Siren,
   Timer,
 } from "lucide-react";
 import { useDash } from "@/components/dashboard/Provider";
 import { Card, IssueBadge, PageHeader, Stat, Tag } from "@/components/dashboard/ui";
 import { Bars, HourlyStack } from "@/components/dashboard/Charts";
-import NigeriaRiskMap from "@/components/dashboard/NigeriaRiskMap";
 import { api, type HandoffUpdateItem } from "@/lib/api";
 
-const MACHINE_KEY_STORAGE = "conflux_demo_machine_key";
+const MACHINE_KEY_STORAGE = "conflux_machine_key";
+const LEGACY_MACHINE_KEY_STORAGE = "conflux_demo_machine_key";
 
 export default function Overview() {
   const {
@@ -32,12 +30,8 @@ export default function Overview() {
     hourlySeries,
     channelSplit,
     isLoading,
-    refresh,
     user,
   } = useDash();
-
-  const [seeding, setSeeding] = useState(false);
-  const [seedFeedback, setSeedFeedback] = useState<string | null>(null);
 
   // 5-second Handoff Ticker state
   const [machineKey, setMachineKey] = useState<string>("");
@@ -51,7 +45,9 @@ export default function Overview() {
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem(MACHINE_KEY_STORAGE);
+      const saved =
+        window.localStorage.getItem(MACHINE_KEY_STORAGE) ||
+        window.localStorage.getItem(LEGACY_MACHINE_KEY_STORAGE);
       if (saved) setMachineKey(saved);
     } catch {}
   }, []);
@@ -105,7 +101,7 @@ export default function Overview() {
     return () => clearInterval(id);
   }, [machineKey, tickerPaused, tickerCursor, pollMachineFeed]);
 
-  // Fallback synthetic ticker items derived from real complaints & incidents if no cfx_api_ key is bound yet
+  // Workspace feed derived from live complaints & incidents when no cfx_api_ key is bound yet
   const fallbackTickerItems: HandoffUpdateItem[] = [
     ...incidents.slice(0, 6).map((inc) => ({
       collection: "incidents" as const,
@@ -157,25 +153,6 @@ export default function Overview() {
       );
     } finally {
       setProvisioningKey(false);
-    }
-  };
-
-  const handleSeedDemo = async () => {
-    setSeeding(true);
-    setSeedFeedback(null);
-    try {
-      const seeded = await api.seedScenario(true);
-      const detected = await api.detectSpikes(seeded.detection_at).catch(() => []);
-      await refresh();
-      setSeedFeedback(
-        `Seeded ${seeded.complaints_created} complaints and detected ${detected.length} active spikes.`
-      );
-    } catch (err) {
-      setSeedFeedback(
-        err instanceof Error ? err.message : "Could not seed demo scenario."
-      );
-    } finally {
-      setSeeding(false);
     }
   };
 
@@ -253,19 +230,6 @@ export default function Overview() {
         title="Live overview"
         sub="Monitor complaint trends, active incident spikes, and the 5-second machine handoff feed."
       />
-
-      {seedFeedback && (
-        <Card className="p-4 mb-5 border-l-4 !border-l-flux flex items-center justify-between gap-3">
-          <p className="text-xs font-medium text-navy">{seedFeedback}</p>
-          <button
-            type="button"
-            onClick={() => setSeedFeedback(null)}
-            className="text-xs text-navy/50 hover:text-navy underline"
-          >
-            Dismiss
-          </button>
-        </Card>
-      )}
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Stat
@@ -377,7 +341,7 @@ export default function Overview() {
 
         {displayedTickerItems.length === 0 ? (
           <div className="rounded-2xl bg-cream/60 border border-navy/[0.06] px-4 py-6 text-center text-xs text-navy/55">
-            No handoff events in window yet. Seed the demo scenario below to watch complaints and incidents stream in.
+            No handoff events in window yet. New complaints and incidents will stream in here.
           </div>
         ) : (
           <div className="max-h-52 overflow-y-auto rounded-2xl bg-navy text-white p-3 space-y-1.5 font-mono text-xs">
@@ -442,9 +406,6 @@ export default function Overview() {
         </Card>
       </div>
 
-      {/* Geospatial Threat & Complaint Map (Nigeria) */}
-      <NigeriaRiskMap />
-
       <Card className="p-2">
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
           <div className="flex items-center gap-2">
@@ -474,27 +435,12 @@ export default function Overview() {
         ) : live.length === 0 ? (
           <div className="px-6 py-12 text-center">
             <div className="w-11 h-11 rounded-2xl bg-flux/10 text-flux flex items-center justify-center mx-auto mb-3">
-              <Radio className="w-5 h-5" />
+              <Siren className="w-6 h-6" />
             </div>
-            <p className="font-semibold text-navy">No incidents — seed the demo</p>
+            <p className="font-semibold text-navy">No active incidents</p>
             <p className="text-sm text-navy/55 max-w-md mx-auto mt-1 mb-4">
-              Populate realistic multi-channel Nigerian banking complaints, transactions, and system events to trigger spike detection.
+              Live spike detection runs on ingested complaints. New spikes will appear here automatically.
             </p>
-            {user?.role !== "manager" && (
-              <button
-                type="button"
-                disabled={seeding}
-                onClick={() => void handleSeedDemo()}
-                className="inline-flex items-center gap-2 rounded-full bg-flux hover:bg-[#d4560f] text-white px-5 py-2.5 text-xs font-semibold transition-colors disabled:opacity-50"
-              >
-                {seeding ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <DatabaseZap className="w-4 h-4" />
-                )}
-                {seeding ? "Seeding demo scenario…" : "Seed demo & detect spikes"}
-              </button>
-            )}
           </div>
         ) : (
           live.map((i, idx) => (

@@ -6,7 +6,6 @@ import { motion } from "framer-motion";
 import {
   AlertTriangle,
   ArrowRight,
-  DatabaseZap,
   Loader2,
   RefreshCw,
   Search,
@@ -16,7 +15,6 @@ import {
 } from "lucide-react";
 import { useDash } from "@/components/dashboard/Provider";
 import { Card, IssueBadge, PageHeader, Stat, Tag } from "@/components/dashboard/ui";
-import { api } from "@/lib/api";
 
 const STATUS_FILTERS = [
   { id: "all", label: "All incidents" },
@@ -27,11 +25,9 @@ const STATUS_FILTERS = [
 ] as const;
 
 export default function IncidentsListPage() {
-  const { incidents, isLoading, detectNow, syncing, refresh, user } = useDash();
+  const { incidents, isLoading, detectNow, syncing, user } = useDash();
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_FILTERS)[number]["id"]>("all");
   const [query, setQuery] = useState("");
-  const [seeding, setSeeding] = useState(false);
-  const [actionMsg, setActionMsg] = useState<string | null>(null);
 
   const canWrite = user?.role !== "manager";
 
@@ -65,45 +61,13 @@ export default function IncidentsListPage() {
     (i) => i.rawStatus === "awaiting_approval" || i.drafts?.some((d) => d.status === "pending")
   ).length;
 
-  const handleSeedDemo = async () => {
-    setSeeding(true);
-    setActionMsg(null);
-    try {
-      const seeded = await api.seedScenario(true);
-      const detected = await api.detectSpikes(seeded.detection_at).catch(() => []);
-      await refresh();
-      setActionMsg(
-        `Seeded ${seeded.complaints_created} complaints & detected ${detected.length} incident spikes.`
-      );
-    } catch (err) {
-      setActionMsg(err instanceof Error ? err.message : "Could not seed demo scenario.");
-    } finally {
-      setSeeding(false);
-    }
-  };
-
   return (
     <>
       <PageHeader
         title="Incidents"
-        sub="Clustered operational spikes, correlation evidence, and human-approved remediation drafts."
+        sub="Live operational spikes, correlation evidence, and human-approved remediation drafts."
         right={
           <div className="flex flex-wrap items-center gap-2.5">
-            {canWrite && (
-              <button
-                type="button"
-                disabled={seeding || syncing}
-                onClick={() => void handleSeedDemo()}
-                className="inline-flex items-center gap-1.5 rounded-full bg-white border border-navy/10 hover:bg-navy/[0.03] text-navy px-4 py-2 text-xs font-semibold transition-colors disabled:opacity-50"
-              >
-                {seeding ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-flux" />
-                ) : (
-                  <DatabaseZap className="w-3.5 h-3.5 text-flux" />
-                )}
-                {seeding ? "Seeding demo…" : "Seed demo scenario"}
-              </button>
-            )}
             <button
               type="button"
               disabled={syncing || !canWrite}
@@ -120,19 +84,6 @@ export default function IncidentsListPage() {
           </div>
         }
       />
-
-      {actionMsg && (
-        <Card className="p-4 mb-5 border-l-4 !border-l-flux bg-white flex items-center justify-between gap-3">
-          <p className="text-xs font-medium text-navy">{actionMsg}</p>
-          <button
-            type="button"
-            onClick={() => setActionMsg(null)}
-            className="text-xs text-navy/50 hover:text-navy underline"
-          >
-            Dismiss
-          </button>
-        </Card>
-      )}
 
       <div className="grid sm:grid-cols-4 gap-4 mb-6">
         <Stat label="Total incidents" value={String(incidents.length)} hint="tracked in current window" />
@@ -202,35 +153,24 @@ export default function IncidentsListPage() {
               <Siren className="w-6 h-6" />
             </div>
             <h4 className="text-base font-semibold text-navy">
-              {incidents.length === 0 ? "No incidents — seed the demo" : "No incidents match your filter"}
+              {incidents.length === 0 ? "No incidents" : "No incidents match your filter"}
             </h4>
             <p className="text-sm text-navy/55 max-w-md mx-auto mt-1 mb-5">
               {incidents.length === 0
-                ? "Seed the synthetic Nigerian banking spike scenario or run spike detection on existing complaints to populate the incident queue."
+                ? "Live spike detection runs on ingested complaints. New spikes will appear here automatically."
                 : "Try clearing your status filter or search query to inspect all incidents."}
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3">
               {incidents.length === 0 && canWrite ? (
-                <>
-                  <button
-                    type="button"
-                    disabled={seeding}
-                    onClick={() => void handleSeedDemo()}
-                    className="inline-flex items-center gap-2 rounded-full bg-flux hover:bg-[#d4560f] text-white px-5 py-2.5 text-xs font-semibold transition-colors disabled:opacity-50"
-                  >
-                    {seeding ? <Loader2 className="w-4 h-4 animate-spin" /> : <DatabaseZap className="w-4 h-4" />}
-                    {seeding ? "Seeding demo scenario…" : "Seed demo & detect spikes"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={syncing}
-                    onClick={() => void detectNow()}
-                    className="inline-flex items-center gap-2 rounded-full bg-navy text-white px-5 py-2.5 text-xs font-semibold hover:bg-navy-600 transition-colors disabled:opacity-50"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin text-flux" : "text-flux"}`} />
-                    Run spike detection
-                  </button>
-                </>
+                <button
+                  type="button"
+                  disabled={syncing}
+                  onClick={() => void detectNow()}
+                  className="inline-flex items-center gap-2 rounded-full bg-navy text-white px-5 py-2.5 text-xs font-semibold hover:bg-navy-600 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin text-flux" : "text-flux"}`} />
+                  Run spike detection
+                </button>
               ) : (
                 <button
                   type="button"

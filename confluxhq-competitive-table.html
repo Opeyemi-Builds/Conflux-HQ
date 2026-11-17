@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ConfluxHQ — Why we win</title>
+<style>
+:root{color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:#E9ECF3;font-family:Arial,Calibri,sans-serif;display:flex;justify-content:center;padding:24px}
+.slide{width:1280px;max-width:100%;background:#fff;border-radius:20px;padding:44px 48px 30px;box-shadow:0 12px 40px rgba(20,30,70,.18)}
+.kicker{font-size:12px;letter-spacing:.16em;color:#028090;font-weight:800;margin-bottom:8px}
+h1{margin:0 0 4px;font-size:34px;color:#1E2761}
+.sub{margin:0 0 18px;color:#5B6478;font-size:15px}
+table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border-radius:12px;border:1px solid #E2E6F0;font-size:14px}
+thead th{background:#1E2761;color:#fff;text-align:left;padding:13px 14px;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+tbody td{padding:12px 14px;border-bottom:1px solid #EDF0F7;vertical-align:top;line-height:1.45}
+tbody tr:last-child td{border-bottom:0}
+tbody tr.win td{background:#EFF8F7}
+.badge{display:inline-block;font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;margin-bottom:6px}
+.b-see{background:#E8EDFF;color:#1E2761}.b-miss{background:#FDECEC;color:#B4232A}.b-edge{background:#028090;color:#fff}
+.moat{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px}
+.moat div{background:#F4F5FA;border-radius:12px;padding:12px 14px}
+.moat b{color:#1E2761;display:block;margin-bottom:4px;font-size:13px}
+.moat span{font-size:12.5px;color:#3A4358;line-height:1.45}
+.foot{margin-top:14px;font-size:11px;color:#8A93A8;display:flex;justify-content:space-between}
+</style>
+</head>
+<body>
+<div class="slide">
+<div class="kicker">WHY CONFLUXHQ WINS</div>
+<h1>Others see a slice. We see whether money arrived.</h1>
+<p class="sub">Complaints as live telemetry + cause + human-approved fix — delivered as a feed, not another dashboard.</p>
+<table>
+<thead><tr><th style="width:20%">Who else</th><th style="width:27%">What they see</th><th style="width:27%">Where they fall short</th><th style="width:26%">ConfluxHQ edge</th></tr></thead>
+<tbody>
+<tr><td><span class="badge b-see">APM</span><br><b>Datadog / Grafana</b></td><td>Servers, uptime, 200 OK</td><td>Misses user-side settlement — backend green while users debited, not credited.</td><td>Flags failed-transfer spikes vs baseline in minutes.</td></tr>
+<tr><td><span class="badge b-see">SOCIAL LISTENING</span><br><b>Brandwatch / Sprinklr</b></td><td>Mentions, sentiment</td><td>No release / switch cause. No money-at-risk rank. English-only.</td><td>Pidgin, Yoruba, Hausa, Igbo + issue, severity, region + cause.</td></tr>
+<tr><td><span class="badge b-see">TICKETING / CRM</span><br><b>Zendesk / Freshdesk</b></td><td>One case at a time</td><td>Misses pattern across 1,000s of cases. Slow dots-connecting.</td><td>Grouped + categorized → patterns compound over time.</td></tr>
+<tr><td><span class="badge b-see">FRAUD SYSTEMS</span><br><b>In-house risk</b></td><td>Theft, scams</td><td>Misses failed-transaction waves — today's pain is failed / disputed / delayed.</td><td>Separate fraud queue + settlement-failure detection together.</td></tr>
+<tr><td><span class="badge b-miss">MANUAL</span><br><b>Social + call centre</b></td><td>What staff happen to read</td><td>Three teams, three tools. Trending first, CBN clock ticking.</td><td>One feed, 5-sec API poll into the bank's own dashboard.</td></tr>
+<tr class="win"><td><span class="badge b-edge">CONFLUXHQ</span><br><b>Early-warning layer</b></td><td>Did settlement complete for users, right now?</td><td>—</td><td>Detect with math, humans approve every naira. Full audit log.</td></tr>
+</tbody>
+</table>
+<div class="moat">
+<div><b>Technology</b><span>Median + MAD spike detection (not LLM hallucinations), rules fallback, HMAC webhooks, 403 blocks auto money moves.</span></div>
+<div><b>Data</b><span>Every complaint categorized — volume, growth, money-at-risk. More banks = sharper patterns, tenant-isolated.</span></div>
+<div><b>Partnerships</b><span>1 pilot bank → fintechs, telcos, mobile money → regulator view. Lands inside existing dashboards.</span></div>
+<div><b>Costs</b><span>B2B SaaS per volume + channels. Cheaper than ₦430M penalties + refunds + churn from finding out late.</span></div>
+</div>
+<div class="foot"><span>Team Zymic · Track 1 — Payments & Financial Infrastructure</span><span>Sources: NIBSS · CBN 2025 annual report (verify primary table)</span></div>
+</div>
+</body>
+</html>

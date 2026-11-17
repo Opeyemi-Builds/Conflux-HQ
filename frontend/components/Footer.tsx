@@ -40,8 +40,8 @@ const navColumns = [
     title: "Dashboard",
     links: [
       { label: "Operations overview", href: "/dashboard" },
-      { label: "Geospatial Threat Map", href: "/dashboard/risk-map" },
-      { label: "Active Incidents", href: "/dashboard/incidents/latest" },
+      { label: "Regional Breakdown", href: "/dashboard/analytics" },
+      { label: "Active Incidents", href: "/dashboard/incidents" },
       { label: "All Complaints Feed", href: "/dashboard/complaints" },
       { label: "Fraud & Security Queue", href: "/dashboard/security" },
       { label: "Analytics & Trends", href: "/dashboard/analytics" },
